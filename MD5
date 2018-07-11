@@ -1,8 +1,8 @@
-973690b19379f67a4c3711bd16474997 *DESCRIPTION
+15844bf9df0cc204f5f21428a61e3d19 *DESCRIPTION
 bae4586da500e56d94dca958029573db *NAMESPACE
-2cde620ca686e0e658a388b6a3a04932 *NEWS.md
+5ad30e89e05fe66395ceb62aced9ac58 *NEWS.md
 e59905c09f78578f67189d32cb66b991 *R/data.R
-35c4b90dbe0863bf884cf2632e835e3a *R/did.R
+d806f5c3ef27db28925552fa9c9249ef *R/did.R
 7963061ff00a2e0d056a347b4adbce5e *R/imports.R
 b1939acfa07da0a966b4a1fadfb46b4b *R/zzz.R
 f3f4934df054a05e274d87a3ed706148 *README.md
@@ -19,7 +19,7 @@ fc8298dafe5ca461ce6a9fda51b45e14 *man/figures/README-unnamed-chunk-6-1.png
 63d4293dd55202b5dc3ae08d9477ed35 *man/ggdid.Rd
 931227815f6489d092f5e4e2fe73a2a8 *man/gplot.Rd
 0b69140620c7b291e7a9b31993dff892 *man/indicator.Rd
-0a5db81de442cc39a053d5e97391f30e *man/mp.spatt.Rd
+254f52945053f8cbbcfe7f7bd2a69322 *man/mp.spatt.Rd
 334053e86275ad8fe5ffa1c0f995c69c *man/mp.spatt.test.Rd
 3caf9896f797eeb236facffcb5c529bc *man/mpdta.Rd
 dbbfcf789d4e3ac3396d4d223b6ae4c4 *man/onefun.Rd
