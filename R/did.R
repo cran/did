@@ -65,7 +65,7 @@
 #'                 bstrap=FALSE, se=TRUE, cband=FALSE)
 #' summary(out2)
 #'
-#' @references Callaway and Sant'Anna (2018)
+#' @references Callaway, Brantly and Sant'Anna, Pedro.  "Difference-in-Differences with Multiple Time Periods and an Application on the Minimum Wage and Employment." Working Paper <https://ssrn.com/abstract=3148250> (2018).
 #'
 #' @return \code{MP} object
 #'
@@ -78,25 +78,36 @@ mp.spatt <- function(formla, xformla=NULL, data, tname,
                      cband=FALSE, citers=100,
                      seedvec=NULL, pl=FALSE, cores=2,
                      printdetails=TRUE) {
-
-
-    data$y <- data[,as.character(formula.tools::lhs(formla))]
+    
+    data$y <- data[,BMisc::lhs.vars(formla)] ##data[,as.character(formula.tools::lhs(formla))]
     ##figure out the dates and make balanced panel
     tlist <- unique(data[,tname])[order(unique(data[,tname]))] ## this is going to be from smallest to largest
 
     flist <- unique(data[,first.treat.name])[order(unique(data[,first.treat.name]))]
     flist <- flist[flist>0]
 
+    ##################################
+    ## do some error checking
     if (!is.numeric(tlist)) {
         warning("not guaranteed to order time periods correclty if they are not numeric")
     }
+
+    ## check that first.treat doesn't change across periods for particular individuals
+    if (!all(sapply( split(data, data[,idname]), function(df) {
+        length(unique(df[,first.treat.name]))==1
+    }))) {
+        stop("Error: the value of first.treat must be the same across all periods for each particular individual.")
+    }
+    ####################################
+
+    
     tlen <- length(tlist)
     flen <- length(flist)
     if (panel) {
         data <- makeBalancedPanel(data, idname, tname)
         dta <- data[ data[,tname]==tlist[1], ]  ## use this for the influence function
     } else {
-        warning("not guaranteed to work correctly for repeated cross sections")
+        
         dta <- data ## this is for repeated cross sections case though
         ## i'm not sure it's working correctly overall
     }
@@ -111,6 +122,12 @@ mp.spatt <- function(formla, xformla=NULL, data, tname,
                                 pl, cores, printdetails)
 
 
+    if (!panel) { ## if not panel use empirical bootstrap
+        fatt <- results$fatt
+        warning("only reporting point estimates for data with repeated cross sections")
+        return(fatt)
+    }
+    
     fatt <- results$fatt
     inffunc <- results$inffunc
 
@@ -186,18 +203,6 @@ mp.spatt <- function(formla, xformla=NULL, data, tname,
     ## get the actual estimates
 
 
-
-    ## wald test for pre-treatment periods
-    pre <- which(t < group)
-    preatt <- as.matrix(att[pre])
-    preV <- V[pre,pre]
-
-    
-    W <- n*t(preatt)%*%solve(preV)%*%preatt
-
-    q <- length(pre)##sum(1-as.numeric(as.character(results$post))) ## number of restrictions
-    Wpval <- round(1-pchisq(W,q),5)
-
     ## new code
     cval <- qnorm(1-alp/2)
     if (cband) {
@@ -214,6 +219,21 @@ mp.spatt <- function(formla, xformla=NULL, data, tname,
     if (aggte) {
         aggeffects <- compute.aggte(flist, group, t, att, first.treat.name, inffunc1, n, clustervars, dta, idname, bstrap, biters)
     }
+
+    ## wald test for pre-treatment periods
+    pre <- which(t < group)
+    preatt <- as.matrix(att[pre])
+    preV <- V[pre,pre]
+
+
+    if (det(preV) == 0) { ##matrix not invertible
+        warning("Not returning pre-test Wald statistic due to singular covariance matrix")
+        return(MP(group=group, t=t, att=att, V=V, c=cval, inffunc=inffunc1, n=n, aggte=aggeffects))
+    }
+    
+    W <- n*t(preatt)%*%solve(preV)%*%preatt
+    q <- length(pre)##sum(1-as.numeric(as.character(results$post))) ## number of restrictions
+    Wpval <- round(1-pchisq(W,q),5)
 
 
     return(MP(group=group, t=t, att=att, V=V, c=cval, inffunc=inffunc1, n=n, W=W, Wpval=Wpval, aggte=aggeffects))
@@ -244,17 +264,20 @@ compute.mp.spatt <- function(flen, tlen, flist, tlist, data, dta,
                              method, seedvec, se,
                              pl, cores, printdetails) {
 
-    yname <- as.character(formula.tools::lhs(formla))
+    yname <- BMisc::lhs.vars(formla) ##as.character(formula.tools::lhs(formla))
 
     fatt <- list()
     counter <- 1
     inffunc <- array(data=0, dim=c(flen,tlen,nrow(dta)))
     for (f in 1:flen) {
-        ##satt <- list()
+            ##satt <- list()
         for (t in 1:(tlen-1)) {
             pret <- t
             if (flist[f]<=tlist[(t+1)]) {
                 pret <- tail(which(tlist < flist[f]),1) ## remember, this is just an index
+                if (length(pret) == 0) { ## then there are no pre-treatment periods
+                    warning(paste0("There are no pre-treatment periods for the group first treated at ", flist[f]))
+                }
                 if (printdetails) {
                     cat(paste("current period:", tlist[t+1]), "\n")
                     cat(paste("current group:", flist[f]), "\n")
@@ -262,73 +285,93 @@ compute.mp.spatt <- function(flen, tlen, flist, tlist, data, dta,
                 }
             }
 
-            disdat <- data[(data[,tname]==tlist[t+1] | data[,tname]==tlist[pret]),]
-            disdat <- panel2cs(disdat, yname, idname, tname)
+            if (panel) {
+                disdat <- data[(data[,tname]==tlist[t+1] | data[,tname]==tlist[pret]),]
+                disdat <- panel2cs(disdat, yname, idname, tname)
 
-            disdat$C <- 1*(disdat[,first.treat.name] == 0)
+                disdat$C <- 1*(disdat[,first.treat.name] == 0)
 
-            disdat$G <- 1*(disdat[,first.treat.name] == flist[f])
+                disdat$G <- 1*(disdat[,first.treat.name] == flist[f])
 
-            disdat <- droplevels(disdat)
+                disdat <- droplevels(disdat)
 
-            if (is.null(xformla)) {
-                xformla <- ~1
+                if (is.null(xformla)) {
+                    xformla <- ~1
+                }
+                pformla <- xformla
+                ##formula.tools::lhs(pformla) <- as.name("G")
+                pformla <- BMisc::toformula("G", BMisc::rhs.vars(pformla))
+                
+                pscore.reg <- glm(pformla, family=binomial(link="logit"),
+                                  data=subset(disdat, C+G==1))
+                thet <- coef(pscore.reg)
+                pscore <- predict(pscore.reg, newdata=disdat, type="response")
+
+                G <- disdat$G
+                C <- disdat$C
+                dy <- disdat$dy
+                x <- model.matrix(xformla, data=disdat)
+                n <- nrow(disdat)
+
+                attw1 <- G/mean(G)
+                attw2a <- pscore*C/(1-pscore)
+                attw2 <- attw2a/mean(attw2a)
+                att <- mean((attw1 - attw2)*dy)
+
+                fatt[[counter]] <- list(att=att, group=flist[f], year=tlist[(t+1)], post=1*(flist[f]<=tlist[(t+1)]))
+
+                ## get the influence function
+
+                wg <- G/mean(G)
+                wc1 <- C*pscore / (1-pscore)
+                wc <- wc1 / mean(wc1)
+
+                psig <- wg*(dy - mean(wg*dy))
+
+                M <- as.matrix(apply(as.matrix((C/(1-pscore))^2 * g(x,thet) * (dy - mean(wc*dy)) * x), 2, mean) / mean(wc1))
+                A1 <- (G + C)*g(x,thet)^2/(pscore*(1-pscore))
+                A1 <- (t(A1*x)%*%x/n)
+                A2 <- ((G + C)*(G-pscore)*g(x,thet)/(pscore*(1-pscore)))*x
+                A <- A2%*%MASS::ginv(A1)
+                psic <- wc*(dy - mean(wc*dy)) + A%*%M
+
+                inffunc[f,t,] <- psig - psic
+            } else { ## this is repeated cross sections case
+
+                ## can use entire data set to estimate some things
+                data$C <- 1*(data[,first.treat.name] == 0)
+                data$G <- 1*(data[,first.treat.name] == flist[f])
+                if (is.null(xformla)) {
+                    xformla <- ~1
+                }
+                pformla <- xformla
+                pformla <- BMisc::toformula("G", BMisc::rhs.vars(pformla))
+                
+                pscore.reg <- glm(pformla, family=binomial(link="logit"),
+                                  data=subset(data, C+G==1))
+                thet <- coef(pscore.reg)
+                pscore <- predict(pscore.reg, newdata=data, type="response")
+                data$pscore <- pscore
+                lam <- 1/tlen
+                d1 <- mean(data$G)
+                d2 <- mean(data$pscore*data$C/(1-data$pscore))
+                Tt <- 1*(data[,tname]==tlist[t+1])
+                Tgmin1 <- 1*(data[,tname]==tlist[pret])
+                lamt <- mean(Tt)
+                lamgmin1 <- mean(Tgmin1)
+                w1 <- lam*(Tt/lamt - Tgmin1/lamgmin1)
+                attw1 <- data$G/d1
+                attw2a <- pscore*data$C/(1-pscore)
+                attw2 <- attw2a/d2
+                y <- data$y
+                att <- mean(w1*(attw1 - attw2)*y)
+
+                fatt[[counter]] <- list(att=att, group=flist[f], year=tlist[(t+1)], post=1*(flist[f]<=tlist[(t+1)]))
             }
-            pformla <- xformla
-            formula.tools::lhs(pformla) <- as.name("G")
-          
-            pscore.reg <- glm(pformla, family=binomial(link="logit"),
-                              data=subset(disdat, C+G==1))
-            thet <- coef(pscore.reg)
-            pscore <- predict(pscore.reg, newdata=disdat, type="response")
-
-            G <- disdat$G
-            C <- disdat$C
-            dy <- disdat$dy
-            x <- model.matrix(xformla, data=disdat)
-            n <- nrow(disdat)
-
-            attw1 <- G/mean(G)
-            attw2a <- pscore*C/(1-pscore)
-            attw2 <- attw2a/mean(attw2a)
-            att <- mean((attw1 - attw2)*dy)
-
-            fatt[[counter]] <- list(att=att, group=flist[f], year=tlist[(t+1)], post=1*(flist[f]<=tlist[(t+1)]))
-
-            ## get the influence function
-
-            wg <- G/mean(G)
-            wc1 <- C*pscore / (1-pscore)
-            wc <- wc1 / mean(wc1)
-
-            psig <- wg*(dy - mean(wg*dy))
-
-            M <- as.matrix(apply(as.matrix((C/(1-pscore))^2 * g(x,thet) * (dy - mean(wc*dy)) * x), 2, mean) / mean(wc1))
-            A1 <- (G + C)*g(x,thet)^2/(pscore*(1-pscore))
-            A1 <- (t(A1*x)%*%x/n)
-            A2 <- ((G + C)*(G-pscore)*g(x,thet)/(pscore*(1-pscore)))*x
-            A <- A2%*%MASS::ginv(A1)
-            psic <- wc*(dy - mean(wc*dy)) + A%*%M
-
-            inffunc[f,t,] <- psig - psic
 
             counter <- counter+1
-            ## S <- (dta[,first.treat.name]==0 |
-            ##         dta[,first.treat.name]==flist[f])
-            ## r <- mean(S)
-            ## disdat <- data[(data[,tname]==tlist[t+1] | data[,tname]==tlist[pret]) &
-            ##                (data[,first.treat.name]==0 | data[,first.treat.name]==flist[f]),]
-            ## disdat <- droplevels(disdat)
-            ## satt[[t]] <- c(spatt(formla, xformla, t=tlist[t+1], tmin1=tlist[pret],
-            ##           tname=tname, data=disdat, w=w, panel=panel,
-            ##           idname=idname,
-            ##           iters=NULL, alp=NULL, method=method, plot=NULL, se=se,
-            ##           retEachIter=NULL, seedvec=seedvec, pl=pl, cores=cores),
-            ##           group=flist[f], year=tlist[(t+1)], post=1*(flist[f]<=tlist[(t+1)]))
-            ##inffunc[f,t,S] <- satt[[t]]$inffunc
-
         }
-        ##fatt[[f]] <- c(satt, group=flist[f])
+
     }
 
     list(fatt=fatt, inffunc=inffunc)
@@ -369,6 +412,7 @@ MP <- function(group, t, att, V, c, inffunc, n=NULL, W=NULL, Wpval=NULL, aggte=N
 summary.MP <- function(object, ...) {
     mpobj <- object
     out <- cbind(mpobj$group, mpobj$t, mpobj$att, sqrt(diag(mpobj$V)/mpobj$n))
+    citation()
     colnames(out) <- c("group", "time", "att","se")
     cat("\n")
     print(kable(out))
@@ -396,12 +440,20 @@ summary.MP <- function(object, ...) {
 #' @examples
 #' \dontrun{
 #' data(mpdta)
-#' mptest <- mp.spatt.test(lemp ~ treat, xformla=list(~lpop), data=mpdta,
+#' mptest <- mp.spatt.test(lemp ~ treat, xformlalist=list(~lpop), data=mpdta,
 #'                 panel=TRUE, first.treat.name="first.treat",
 #'                 idname="countyreal", tname="year", clustervarlist=list(NULL))
 #' summary(mptest[[1]])
 #' }
 #'
+#' data(mpdta)
+#' mptest <- mp.spatt.test(lemp ~ treat, xformlalist=list(NULL), data=mpdta,
+#'                 panel=TRUE, first.treat.name="first.treat",
+#'                 idname="countyreal", tname="year", clustervarlist=list(NULL))
+#' summary(mptest[[1]])
+#'
+#' @references Callaway, Brantly and Sant'Anna, Pedro.  "Difference-in-Differences with Multiple Time Periods and an Application on the Minimum Wage and Employment." Working Paper <https://ssrn.com/abstract=3148250> (2018).
+#' 
 #' @return list containing test results
 #' @export
 mp.spatt.test <- function(formla, xformlalist=NULL, data, tname,
@@ -412,16 +464,30 @@ mp.spatt.test <- function(formla, xformlalist=NULL, data, tname,
                           pl=FALSE, cores=2) {
 
 
-    data$y <- data[,as.character(formula.tools::lhs(formla))]
+    data$y <- data[,BMisc::lhs.vars(formla)] ##data[,as.character(formula.tools::lhs(formla))]
     ##figure out the dates and make balanced panel
     tlist <- unique(data[,tname])[order(unique(data[,tname]))] ## this is going to be from smallest to largest
 
     flist <- unique(data[,first.treat.name])[order(unique(data[,first.treat.name]))]
     flist <- flist[flist>0]
 
+    
+    ##################################
+    ## eventually can put this in its own functions as it is duplicate
+    ## code for the estimations
+    ## do some error checking
     if (!is.numeric(tlist)) {
         warning("not guaranteed to order time periods correclty if they are not numeric")
     }
+
+    ## check that first.treat doesn't change across periods for particular individuals
+    if (!all(sapply( split(data, data[,idname]), function(df) {
+        length(unique(df[,first.treat.name]))==1
+    }))) {
+        stop("Error: the value of first.treat must be the same across all periods for each particular individual.")
+    }
+    ####################################
+
     tlen <- length(tlist)
     flen <- length(flist)
     if (panel) {
@@ -439,7 +505,7 @@ mp.spatt.test <- function(formla, xformlalist=NULL, data, tname,
         weightfun <- expf
     }
 
-
+    xformlalist <- lapply(xformlalist, function(ff) if (is.null(ff)) ~1 else ff)
 
     thecount <- 1
     innercount <- 1
@@ -476,11 +542,8 @@ mp.spatt.test <- function(formla, xformlalist=NULL, data, tname,
 
             disdat <- droplevels(disdat)
 
-            if (is.null(xformla)) {
-                xformla <- ~1
-            }
             pformla <- xformla
-            formula.tools::lhs(pformla) <- as.name("G")
+            pformla <- BMisc::toformula("G", BMisc::rhs.vars(pformla))##formula.tools::lhs(pformla) <- as.name("G")
             pscore.reg <- glm(pformla, family=binomial(link="logit"),
                               data=subset(disdat, C+G==1))
             thetlist[[f]] <- coef(pscore.reg)
@@ -493,7 +556,7 @@ mp.spatt.test <- function(formla, xformlalist=NULL, data, tname,
         thecount <<- thecount+1
         out <- pbapply::pblapply(1:nrow(X), function(i) {
             www <- as.numeric(weightfun(X1, X[i,]))##exp(X1%*%X[i,])##plogis(X1%*%X[i,]) ##(1*(apply((X1 <= X[i,]), 1, all)))
-            yname <- as.character(formula.tools::lhs(formla))
+            yname <- BMisc::lhs.vars(formla) ##as.character(formula.tools::lhs(formla))
 
             fatt <- list()
             counter <- 1
@@ -592,13 +655,16 @@ mp.spatt.test <- function(formla, xformlalist=NULL, data, tname,
         KS <- sqrt(n) * sum(apply(J,2,function(j) max(abs(j))))
         CvM <- n*sum(apply(J, 2, function(j) mean( j^2 )))
 
-
+        if (!pl) {
+            cores <- 1
+        }
+        
         innercount <<- 1
         lapply(clustervarlist, function(clustervars) {
 
             cat("\n >>> Inner Step", innercount, "of", length(clustervarlist), ":.....................\n")
             innercount <<- innercount+1
-            bout <- pbapply::pblapply(1:biters, cl=8, FUN=function(b) {
+            bout <- pbapply::pblapply(1:biters, cl=cores, FUN=function(b) {
                 Jb <- t(sapply(outinffunc, function(inffunc1) {
                     ## new version
                     if (idname %in% clustervars) {
@@ -693,6 +759,7 @@ summary.MP.TEST <- function(object, ... ) {
     CvM <- object$CvM
     CvMcval <- object$CvMcval
     CvMpval <- object$CvMpval
+    citation()
     cat("Cramer von Mises: \n")
     cat("  Test Statistic: ", CvM, "\n")
     cat("  Critical Value: ", CvMcval, "\n")
@@ -1098,6 +1165,7 @@ AGGTE <- function(simple.att=NULL, simple.se=NULL, selective.att=NULL, selective
 #'
 #' @export
 summary.AGGTE <- function(object, ...) {
+    citation()
     sep <- "          "
     cat("Simple ATT    : ", object$simple.att, "\n")
     cat("  SE          : ", object$simple.se, "\n")

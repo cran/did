@@ -4,10 +4,10 @@
 \alias{mp.spatt.test}
 \title{mp.spatt.test}
 \usage{
-mp.spatt.test(formla, xformlalist = NULL, data, tname, weightfun = NULL,
-  w = NULL, panel = FALSE, idname = NULL, first.treat.name, alp = 0.05,
-  method = "logit", biters = 100, clustervarlist = NULL, pl = FALSE,
-  cores = 2)
+mp.spatt.test(formla, xformlalist = NULL, data, tname,
+  weightfun = NULL, w = NULL, panel = FALSE, idname = NULL,
+  first.treat.name, alp = 0.05, method = "logit", biters = 100,
+  clustervarlist = NULL, pl = FALSE, cores = 2)
 }
 \arguments{
 \item{formla}{The formula y ~ d where y is the outcome and d is the
@@ -58,10 +58,19 @@ integrated moments test for conditional common trends holding in all pre-treatme
 \examples{
 \dontrun{
 data(mpdta)
-mptest <- mp.spatt.test(lemp ~ treat, xformla=list(~lpop), data=mpdta,
+mptest <- mp.spatt.test(lemp ~ treat, xformlalist=list(~lpop), data=mpdta,
                 panel=TRUE, first.treat.name="first.treat",
                 idname="countyreal", tname="year", clustervarlist=list(NULL))
 summary(mptest[[1]])
 }
 
+data(mpdta)
+mptest <- mp.spatt.test(lemp ~ treat, xformlalist=list(NULL), data=mpdta,
+                panel=TRUE, first.treat.name="first.treat",
+                idname="countyreal", tname="year", clustervarlist=list(NULL))
+summary(mptest[[1]])
+
+}
+\references{
+Callaway, Brantly and Sant'Anna, Pedro.  "Difference-in-Differences with Multiple Time Periods and an Application on the Minimum Wage and Employment." Working Paper <https://ssrn.com/abstract=3148250> (2018).
 }
