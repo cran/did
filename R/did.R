@@ -18,7 +18,9 @@
 #'  sections
 #' @param idname The individual (cross-sectional unit) id name
 #' @param first.treat.name The name of the variable in \code{data} that contains the first
-#'  period when a particular observation is treated
+#'  period when a particular observation is treated.  This should be a positive
+#'  number for all observations in treated groups.  It should be 0 for observations
+#'  in the untreated group.
 #' @param alp the significance level, default is 0.05
 #' @param method The method for estimating the propensity score when covariates
 #'  are included
@@ -78,12 +80,22 @@ mp.spatt <- function(formla, xformla=NULL, data, tname,
                      cband=FALSE, citers=100,
                      seedvec=NULL, pl=FALSE, cores=2,
                      printdetails=TRUE) {
-    
+
+    ## make sure that data is a data.frame
+    ## this gets around RStudio's default of reading data as tibble
+    if (!all( class(data) == "data.frame")) {
+        warning("class of data object was not data.frame; converting...")
+        data <- as.data.frame(data)
+    }
+
     data$y <- data[,BMisc::lhs.vars(formla)] ##data[,as.character(formula.tools::lhs(formla))]
     ##figure out the dates and make balanced panel
     tlist <- unique(data[,tname])[order(unique(data[,tname]))] ## this is going to be from smallest to largest
 
     flist <- unique(data[,first.treat.name])[order(unique(data[,first.treat.name]))]
+    if ( length(flist[flist==0]) == 0) {
+        warning("dataset does not have any observations in the control group.  make sure to set data[,first.treat.name] = 0 for observations in the control group.")
+    }
     flist <- flist[flist>0]
 
     ##################################
@@ -100,14 +112,14 @@ mp.spatt <- function(formla, xformla=NULL, data, tname,
     }
     ####################################
 
-    
+
     tlen <- length(tlist)
     flen <- length(flist)
     if (panel) {
         data <- makeBalancedPanel(data, idname, tname)
         dta <- data[ data[,tname]==tlist[1], ]  ## use this for the influence function
     } else {
-        
+
         dta <- data ## this is for repeated cross sections case though
         ## i'm not sure it's working correctly overall
     }
@@ -117,18 +129,30 @@ mp.spatt <- function(formla, xformla=NULL, data, tname,
     }
 
 
+    #################################################################
+    ## more error handling after we have balanced the panel
+    gsize <- aggregate(data[,first.treat.name], by=list(data[,first.treat.name]), function(x) length(x)/length(tlist))
+    reqsize <- length(rhs.vars(xformla)) + 5 ## 5 is just to give a buffer, could increase or decrease
+    gsize <- subset(gsize, x < reqsize) ## x is name of column from aggregate
+    if (nrow(gsize) > 0) {
+        gpaste <-  paste(gsize[,1], collapse=",")
+        warning(paste0("There are some very small groups in your dataset...\n  This is a very common source of bugs...\n  Check groups: ", gpaste, "\n  and consider dropping these..."))
+    }
+
+    #################################################################
+
     results <- compute.mp.spatt(flen, tlen, flist, tlist, data, dta, first.treat.name,
                                 formla, xformla, tname, w, panel, idname, method, seedvec, se,
                                 pl, cores, printdetails)
 
 
-    
+
     ## if (!panel) { ## if not panel use empirical bootstrap
     ##     fatt <- results$fatt
     ##     warning("only reporting point estimates for data with repeated cross sections")
     ##     return(fatt)
     ## }
-    
+
     fatt <- results$fatt
     inffunc <- results$inffunc
 
@@ -235,7 +259,7 @@ mp.spatt <- function(formla, xformla=NULL, data, tname,
         warning("Not returning pre-test Wald statistic due to singular covariance matrix")
         return(MP(group=group, t=t, att=att, V=V, c=cval, inffunc=inffunc1, n=n, aggte=aggeffects))
     }
-    
+
     W <- n*t(preatt)%*%solve(preV)%*%preatt
     q <- length(pre)##sum(1-as.numeric(as.character(results$post))) ## number of restrictions
     Wpval <- round(1-pchisq(W,q),5)
@@ -284,7 +308,7 @@ compute.mp.spatt <- function(flen, tlen, flist, tlist, data, dta,
 
                 ## print a warning message if there are no pre-treatment
                 ##  periods
-                if (length(pret) == 0) { 
+                if (length(pret) == 0) {
                     warning(paste0("There are no pre-treatment periods for the group first treated at ", flist[f]))
                 }
 
@@ -325,13 +349,20 @@ compute.mp.spatt <- function(flen, tlen, flist, tlist, data, dta,
                 pformla <- xformla
 
                 pformla <- BMisc::toformula("G", BMisc::rhs.vars(pformla))
-                
+
                 pscore.reg <- glm(pformla, family=binomial(link="logit"),
                                   data=subset(disdat, C+G==1))
                 thet <- coef(pscore.reg)
+
+                ## error handling for too many covariates
+                if (any(is.na(thet))) {
+                    warning(paste0("Problems estimating propensity score...likely perfectly predicting treatment for group: ", flist[f], " at time period: ", tlist[t+1]))
+                }
+
+                ## estimate propensity score
                 pscore <- predict(pscore.reg, newdata=disdat, type="response")
 
-                                
+
                 ## give short names for data in this iteration
                 G <- disdat$G
                 C <- disdat$C
@@ -397,7 +428,12 @@ compute.mp.spatt <- function(flen, tlen, flist, tlist, data, dta,
                 pformla <- BMisc::toformula("G", BMisc::rhs.vars(pformla))
                 pscore.reg <- glm(pformla, family=binomial(link="logit"),
                                   data=subset(data, C+G==1))
+
                 thet <- coef(pscore.reg)
+                ## error handling for too many covariates
+                if (any(is.na(thet))) {
+                    warning(paste0("Problems estimating propensity score...likely perfectly predicting treatment for group: ", flist[f], " at time period: ", tlist[t+1]))
+                }
                 pscore <- predict(pscore.reg, newdata=data, type="response")
                 data$pscore <- pscore
 
@@ -418,7 +454,7 @@ compute.mp.spatt <- function(flen, tlen, flist, tlist, data, dta,
                 ## weights for group C in period G-1
                 wc2 <- data$preT * pscore * data$C / (1-pscore)
                 nwc2 <- wc2/mean(wc2)
-                
+
                 ## average treatment effect
                 att <- mean( ((nwt1 - nwt2) - (nwc1 - nwc2))*data$y)
 
@@ -531,7 +567,7 @@ summary.MP <- function(object, ...) {
 #' summary(mptest[[1]])
 #'
 #' @references Callaway, Brantly and Sant'Anna, Pedro.  "Difference-in-Differences with Multiple Time Periods and an Application on the Minimum Wage and Employment." Working Paper <https://ssrn.com/abstract=3148250> (2018).
-#' 
+#'
 #' @return list containing test results
 #' @export
 mp.spatt.test <- function(formla, xformlalist=NULL, data, tname,
@@ -549,7 +585,7 @@ mp.spatt.test <- function(formla, xformlalist=NULL, data, tname,
     flist <- unique(data[,first.treat.name])[order(unique(data[,first.treat.name]))]
     flist <- flist[flist>0]
 
-    
+
     ##################################
     ## eventually can put this in its own functions as it is duplicate
     ## code for the estimations
@@ -736,7 +772,7 @@ mp.spatt.test <- function(formla, xformlalist=NULL, data, tname,
         if (!pl) {
             cores <- 1
         }
-        
+
         innercount <<- 1
         lapply(clustervarlist, function(clustervars) {
 
@@ -1334,9 +1370,18 @@ g <- function(x,thet) {
     as.numeric(gval)
 }
 
-## x nxk matrix
-## thet kx1 vector
-## return nx1 vector
+## ## x nxk matrix
+## ## thet kx1 vector
+## ## return nx1 vector
+## #' @title G
+## #'
+## #' @description Logit cdf
+## #'
+## #' @param x nxk data matrix
+## #' @param thet kx1 vector of parameters
+## #'
+## #' @return nx1 vector
+## #' @keywords internal
 G <- function(x,thet) {
     x <- as.matrix(x)
     thet <- as.matrix(thet)
