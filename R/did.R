@@ -242,7 +242,7 @@ mp.spatt <- function(formla, xformla=NULL, data, tname,
 
     aggeffects <- NULL
     if (aggte) {
-        aggeffects <- compute.aggte(flist, group, t, att, first.treat.name, inffunc1, n, clustervars, dta, idname, bstrap, biters)
+        aggeffects <- compute.aggte(flist, tlist, group, t, att, first.treat.name, inffunc1, n, clustervars, dta, idname, bstrap, biters)
     }
 
     ## wald test for pre-treatment periods
@@ -904,6 +904,7 @@ gplot <- function(ssresults, ylim=NULL, xlab=NULL, ylab=NULL, title="Group", xga
         geom_errorbar(aes(colour=post), width=0.1) +
         scale_y_continuous(limits=ylim) +
         scale_x_discrete(breaks=dabreaks, labels=as.character(dabreaks)) +
+        scale_colour_hue(drop=FALSE) + 
         ylab("") +
         xlab("") +
         ggtitle(paste(title, unique(ssresults$group))) +
@@ -918,6 +919,15 @@ gplot <- function(ssresults, ylim=NULL, xlab=NULL, ylab=NULL, title="Group", xga
 #' @description Function to plot \code{MP} objects
 #'
 #' @param mpobj an \code{MP} object
+#' @param type the type of plot, should be one of "attgt", "dynamic",
+#'  "selective", "calendar", "dynsel".  "attgt" is the default and plots
+#'  all group-time average treatment effects separately by group (including
+#'  pre-treatment time periods); "dynamic" plots dynamic treatment effects --
+#'  these are the same as event studies; "selective" plots average effects
+#'  of the treatment separately by group (which allows for selective treatment
+#'  timing); "calendar" plots average treatment effects by time period; and
+#'  "dynsel" plots dynamic effects allowing for selective treatment timing
+#'  (this also requires setting the additional paramater e1)
 #' @param ylim optional y limits for the plot; settng here makes the y limits
 #'  the same across different plots
 #' @param xlab optional x-axis label
@@ -928,6 +938,10 @@ gplot <- function(ssresults, ylim=NULL, xlab=NULL, ylab=NULL, title="Group", xga
 #'  value on the x-axis.  The default is 1.
 #' @param ncol The number of columns to include in the resulting plot.  The
 #'  default is 1.
+#' @param e1 only used when plot type is "dynsel", this specifies the number
+#'  of post-treatment periods that need to be available for particular groups
+#'  to be included in the resulting plot when there are dynamic treatment
+#'  effects and selective treatment timing
 #'
 #' @examples
 #' \dontrun{
@@ -940,30 +954,63 @@ gplot <- function(ssresults, ylim=NULL, xlab=NULL, ylab=NULL, title="Group", xga
 #' }
 #'
 #' @export
-ggdid <- function(mpobj, ylim=NULL, xlab=NULL, ylab=NULL, title="Group", xgap=1, ncol=1) {
+ggdid <- function(mpobj, type=c("attgt", "dynamic", "selective", "calendar", "dynsel"), ylim=NULL, xlab=NULL, ylab=NULL, title="Group", xgap=1, ncol=1, e1=1) {
+
+    type <- type[1]
+
     G <- length(unique(mpobj$group))
     Y <- length(unique(mpobj$t))## drop 1 period bc DID
     g <- unique(mpobj$group)[order(unique(mpobj$group))] ## -1 to drop control group
     y <- unique(mpobj$t)
-    results <- data.frame(year=rep(y,G))
-    results$group <- unlist(lapply(g, function(x) { rep(x, Y) }))##c(rep(2004,G),rep(2006,G),rep(2007,G))
-    results$att <- mpobj$att
-    n <- mpobj$n
-    results$ate.se <- sqrt(diag(mpobj$V)/n)
-    results$post <- as.factor(1*(results$year >= results$group))
-    results$year <- as.factor(results$year)
-    results$c <- mpobj$c
-    vcovatt <- mpobj$V/n
 
-    ##results <- mp2ATT(results, vcovatt)
+    if (type=="attgt") {        
+        results <- data.frame(year=rep(y,G))
+        results$group <- unlist(lapply(g, function(x) { rep(x, Y) }))##c(rep(2004,G),rep(2006,G),rep(2007,G))
+        results$att <- mpobj$att
+        n <- mpobj$n
+        results$ate.se <- sqrt(diag(mpobj$V)/n)
+        results$post <- as.factor(1*(results$year >= results$group))
+        results$year <- as.factor(results$year)
+        results$c <- mpobj$c
+        vcovatt <- mpobj$V/n
 
-    mplots <- lapply(g, function(g) {
-        thisdta <- subset(results, group==g)
-        gplot(thisdta, ylim, xlab, ylab, title, xgap)
-    })
+        ##results <- mp2ATT(results, vcovatt)
 
-    do.call("grid.arrange", c(mplots))
+        mplots <- lapply(g, function(g) {
+            thisdta <- subset(results, group==g)
+            gplot(thisdta, ylim, xlab, ylab, title, xgap)
+        })
 
+        do.call("grid.arrange", c(mplots))
+    } else if (type=="dynamic") {
+        aggte <- mpobj$aggte
+        if (mpobj$c > 2) warning("uniform bands not implemented yet for this plot...")
+        elen <- length(aggte$dynamic.att.e)
+        results <- cbind.data.frame(year=as.factor(seq(1:elen)), att=aggte$dynamic.att.e, ate.se=aggte$dynamic.se.e, post=as.factor(1), c=qnorm(.975))
+        p <- gplot(results, ylim, xlab, ylab, title, xgap)
+        p
+    } else if (type=="selective") {
+        aggte <- mpobj$aggte
+        if (mpobj$c > 2) warning("uniform bands not implemented yet for this plot...")
+        results <- cbind.data.frame(year=as.factor(aggte$groups), att=aggte$selective.att.g, ate.se=aggte$selective.se.g, post=as.factor(1), c=qnorm(.975))
+        p <- gplot(results, ylim, xlab, ylab, title, xgap)
+        p
+    } else if (type=="calendar") {
+        aggte <- mpobj$aggte
+        if (mpobj$c > 2) warning("uniform bands not implemented yet for this plot...")
+        results <- cbind.data.frame(year=as.factor(aggte$times[aggte$times >= min(aggte$groups)]), att=aggte$calendar.att.t, ate.se=aggte$calendar.se.t, post=as.factor(1), c=qnorm(.975))
+        p <- gplot(results, ylim, xlab, ylab, title, xgap)
+        p
+    } else if (type=="dynsel") {
+        if (is.null(e1)) {
+            stop("must provide value of e1 for reporting dynamic effects with selective treatment timing")
+        }
+        aggte <- mpobj$aggte
+        if (mpobj$c > 2) warning("uniform bands not implemented yet for this plot...")
+        results <- cbind.data.frame(year=as.factor(1:e1), att=aggte$dynsel.att.ee1[[e1]]$dte[1:e1], ate.se=aggte$dynsel.se.ee1[[e1]]$se[1:e1], post=as.factor(1), c=qnorm(.975))
+        p <- gplot(results, ylim, xlab, ylab, title, xgap)
+        p
+    }    
 }
 
 
@@ -979,7 +1026,7 @@ ggdid <- function(mpobj, ylim=NULL, xlab=NULL, ylab=NULL, title="Group", xgap=1,
 #' @keywords internal
 #'
 #' @export
-compute.aggte <- function(flist, group, t, att, first.treat.name, inffunc1, n, clustervars, dta, idname, bstrap, biters) {
+compute.aggte <- function(flist, tlist, group, t, att, first.treat.name, inffunc1, n, clustervars, dta, idname, bstrap, biters) {
 
     if ( (length(clustervars) > 0) & !bstrap) {
         warning("clustering the standard errors requires using the bootstrap, resulting standard errors are NOT accounting for clustering")
@@ -1054,6 +1101,7 @@ compute.aggte <- function(flist, group, t, att, first.treat.name, inffunc1, n, c
     originalt <- t
     originalgroup <- group
     originalflist <- flist
+    originaltlist <- tlist
     uniquet <- seq(1,length(unique(t)))
     ## function to switch from "new" t values to
     ##  original t values
@@ -1222,7 +1270,7 @@ compute.aggte <- function(flist, group, t, att, first.treat.name, inffunc1, n, c
         getSE(d$whiche, d$pge)
     })
 
-    AGGTE(simple.att=simple.att, simple.se=simple.se, selective.att=selective.att, selective.se=selective.se, selective.att.g=selective.att.g, selective.se.g=selective.se.g, dynamic.att=dynamic.att, dynamic.se=dynamic.se, dynamic.att.e=dynamic.att.e, dynamic.se.e=dynamic.se.e, calendar.att=calendar.att, calendar.se=calendar.se, calendar.att.t=calendar.att.t, calendar.se.t=calendar.se.t, dynsel.att.e1=dynsel.att.e1, dynsel.se.e1=dynsel.se.e1, dynsel.att.ee1=dynsel.att.ee1, dynsel.se.ee1=dynsel.se.ee1)
+    AGGTE(simple.att=simple.att, simple.se=simple.se, selective.att=selective.att, selective.se=selective.se, selective.att.g=selective.att.g, selective.se.g=selective.se.g, dynamic.att=dynamic.att, dynamic.se=dynamic.se, dynamic.att.e=dynamic.att.e, dynamic.se.e=dynamic.se.e, calendar.att=calendar.att, calendar.se=calendar.se, calendar.att.t=calendar.att.t, calendar.se.t=calendar.se.t, dynsel.att.e1=dynsel.att.e1, dynsel.se.e1=dynsel.se.e1, dynsel.att.ee1=dynsel.att.ee1, dynsel.se.ee1=dynsel.se.ee1,groups=originalflist,times=originaltlist)
 }
 
 
@@ -1263,8 +1311,10 @@ compute.aggte <- function(flist, group, t, att, first.treat.name, inffunc1, n, c
 #'  in order to be included in the results and for each length of exposure
 #'  to treatment
 #' @param dynsel.se.ee1 the standard error for \code{dynsel.att.ee1}
-AGGTE <- function(simple.att=NULL, simple.se=NULL, selective.att=NULL, selective.se=NULL, selective.att.g=NULL, selective.se.g=NULL, dynamic.att=NULL, dynamic.se=NULL, dynamic.att.e=NULL, dynamic.se.e=NULL, calendar.att=NULL, calendar.se=NULL, calendar.att.t=NULL, calendar.se.t=NULL, dynsel.att.e1=NULL, dynsel.se.e1=NULL, dynsel.att.ee1=NULL, dynsel.se.ee1=NULL) {
-    out <- list(simple.att=simple.att, simple.se=simple.se, selective.att=selective.att, selective.se=selective.se, selective.att.g=selective.att.g, selective.se.g=selective.se.g, dynamic.att=dynamic.att, dynamic.se=dynamic.se, dynamic.att.e=dynamic.att.e, dynamic.se.e=dynamic.se.e, calendar.att=calendar.att, calendar.se=calendar.se, calendar.att.t=calendar.att.t, calendar.se.t=calendar.se.t, dynsel.att.e1=dynsel.att.e1, dynsel.se.e1=dynsel.se.e1, dynsel.att.ee1=dynsel.att.ee1, dynsel.se.ee1=dynsel.se.ee1)
+#' @param groups vector of all groups
+#' @param times vector of all times
+AGGTE <- function(simple.att=NULL, simple.se=NULL, selective.att=NULL, selective.se=NULL, selective.att.g=NULL, selective.se.g=NULL, dynamic.att=NULL, dynamic.se=NULL, dynamic.att.e=NULL, dynamic.se.e=NULL, calendar.att=NULL, calendar.se=NULL, calendar.att.t=NULL, calendar.se.t=NULL, dynsel.att.e1=NULL, dynsel.se.e1=NULL, dynsel.att.ee1=NULL, dynsel.se.ee1=NULL, groups=NULL, times=NULL) {
+    out <- list(simple.att=simple.att, simple.se=simple.se, selective.att=selective.att, selective.se=selective.se, selective.att.g=selective.att.g, selective.se.g=selective.se.g, dynamic.att=dynamic.att, dynamic.se=dynamic.se, dynamic.att.e=dynamic.att.e, dynamic.se.e=dynamic.se.e, calendar.att=calendar.att, calendar.se=calendar.se, calendar.att.t=calendar.att.t, calendar.se.t=calendar.se.t, dynsel.att.e1=dynsel.att.e1, dynsel.se.e1=dynsel.se.e1, dynsel.att.ee1=dynsel.att.ee1, dynsel.se.ee1=dynsel.se.ee1,groups=groups,times=times)
     class(out) <- "AGGTE"
     out
 }
@@ -1275,12 +1325,16 @@ AGGTE <- function(simple.att=NULL, simple.se=NULL, selective.att=NULL, selective
 #' @description print a summary of an AGGTE object
 #'
 #' @param object an AGGTE object
+#' @param type which type of summary to print, options are "dynamic", "selective", "calendar", and "dynsel"
+#' @param e1 if the type is "dynsel", this is the number of post-treatment periods required in order for a group to be used to construct aggregated parameters with selective treatment timing and dynamic effects; otherwise not used
 #' @param ... other variables
 #'
 #' @export
-summary.AGGTE <- function(object, ...) {
+summary.AGGTE <- function(object, type=c("dynamic","selective","calendar","dynsel"), e1=1, ...) {
     citation()
     sep <- "          "
+    cat("Overall Summary Measures", "\n")
+    cat("------------------------", "\n")
     cat("Simple ATT    : ", object$simple.att, "\n")
     cat("  SE          : ", object$simple.se, "\n")
     cat("Selective ATT : ", object$selective.att, "\n")
@@ -1288,9 +1342,46 @@ summary.AGGTE <- function(object, ...) {
     cat("Dynamic ATT   : ", object$dynamic.att, "\n")
     cat("  SE          : ", object$dynamic.se, "\n")
     cat("Calendar ATT  : ", object$calendar.att, "\n")
-    cat("  SE          : ", object$calendar.se, "\n")
-}
+    cat("  SE          : ", object$calendar.se, "\n\n")
+    type <- type[1]
+    if (type == "dynamic") {
+        cat("Dynamic Treatment Effects", "\n")
+        cat("-------------------------")
+        elen <- length(object$dynamic.att.e)
+        printmat <- cbind(seq(1:elen), object$dynamic.att.e, object$dynamic.se.e)
+        colnames(printmat) <- c("e","att","se")
+        print(kable(printmat))
+    }
 
+    ## issue is that groups and times are a bit off..., they are getting set though
+    if (type=="selective") {
+        cat("Selective Treatment Timing", "\n")
+        cat("--------------------------", "\n")
+        printmat <- cbind(object$groups, object$selective.att.g, object$selective.se.g)
+        colnames(printmat) <- c("g","att","se")
+        print(kable(printmat))
+    }
+
+    if (type=="calendar") {
+        cat("Calendar Time Effects", "\n")
+        cat("---------------------")
+        printmat <- cbind(object$times[object$times >= min(object$groups)], object$calendar.att.t, object$calendar.se.t)
+        colnames(printmat) <- c("t","att","se")
+        print(kable(printmat))
+    }
+
+    if (type=="dynsel") {
+        if (is.null(e1)) {
+            stop("must provide value of e1 for reporting dynamic effects with selective treatment timing")
+        }
+        cat("Selective Treatment Timing and Dynamic Effects with e=", e1, "\n")
+        cat("-------------------------------------------------------")
+        printmat <- cbind(seq(1:e1), object$dynsel.att.ee1[[e1]]$dte[1:e1],
+                          object$dynsel.se.ee1[[e1]]$se[1:e1])
+        colnames(printmat) <- c("e","att","se")
+        print(kable(printmat))
+    }
+}
 
 
 
