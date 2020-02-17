@@ -1,4 +1,7 @@
-# did 1.2.2 (not released)
+# did 1.2.3
+  * Corrected check problems
+
+# did 1.2.2
 
   * Improved ways to summarize aggregated treatment effect parameters
 
@@ -8,7 +11,7 @@
 
   * Improved ways to easily plot aggregated treatment effect parameters
   
-# did 1.2.1 (on CRAN)
+# did 1.2.1
 
   * Added some error handling for some cases with small group sizes, and fixed some cryptic error messages
 
