@@ -3,9 +3,8 @@
 \docType{package}
 \name{did}
 \alias{did}
-\title{did: Difference in Differences with multiple periods and variation in
- treatment timing}
+\title{Difference in Differences}
 \description{
-did: Difference in Differences with multiple periods and variation in
+Difference in Differences with multiple periods and variation in
  treatment timing
 }

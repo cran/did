@@ -3,8 +3,9 @@
 \docType{data}
 \name{mpdta}
 \alias{mpdta}
-\title{County teen employment}
-\format{A data frame with 2000 rows and 5 variables:
+\title{County Teen Employment Dataset}
+\format{
+A data frame with 2000 rows and 5 variables:
 \describe{
   \item{year}{the year of the observation}
   \item{countyreal}{a unique identifier for a particular county}
@@ -15,16 +16,17 @@
    minimum wages equal to the federal minimum wage over the entire
    period.}
   \item{treat}{whether or not a particular county is treated in that year}
-}}
+}
+}
 \source{
-Callaway and Sant'Anna (2018)
+Callaway and Sant'Anna (2020)
 }
 \usage{
 mpdta
 }
 \description{
-A dataset containing (the log of) teen employment in 500 counties in the U.S.
- from 2004 to 2007.  This is a subset of the dataset used in Callaway and
- Sant'Anna (2018).  See that paper for additional descriptions.
+A dataset containing (the log of) teen employment in 500 counties
+ in the U.S. from 2004 to 2007.  This is a subset of the dataset used in Callaway and
+ Sant'Anna (2020).  See that paper for additional descriptions.
 }
 \keyword{datasets}
