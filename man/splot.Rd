@@ -10,7 +10,9 @@ splot(
   xlab = NULL,
   ylab = NULL,
   title = "Group",
-  legend = TRUE
+  legend = TRUE,
+  ref_line = 0,
+  theming = TRUE
 )
 }
 \value{
@@ -18,6 +20,6 @@ a \code{ggplot2} object
 }
 \description{
 alternative plotting function for the case with selective treatment
- timing
+timing
 }
 \keyword{internal}

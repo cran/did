@@ -35,61 +35,71 @@ mboot <- function(inf.func, DIDparams) {
   inf.func <- as.matrix(inf.func)
 
   # set correct number of units
-  n <- ifelse(!panel & !true_repeated_cross_sections,
-              length(unique(data[,idname])), # unbalanced panel
-              nrow(inf.func)) # balanced panel or repeated cross sections
+  n <- nrow(inf.func)
 
-  if (panel | true_repeated_cross_sections) {
-    # if include id as variable to cluster on
-    # drop it as we do this automatically
-    if (idname %in% clustervars) {
-      clustervars <- clustervars[-which(clustervars==idname)]
-    }
-  } else if (!true_repeated_cross_sections) {
-    # if unbalanced panel, then we have to cluster on idname
-    # (not sure if totally safe), but here we assume that
-    # clustervars would only potentially include more aggregated
-    # clustering than just using id (i.e. clustering at state level
-    # always would cluster at individual level)
-    if (is.null(clustervars)) {
-      clustervars <- idname
+  # if include id as variable to cluster on
+  # drop it as we do this automatically
+  if (idname %in% clustervars) {
+    clustervars <- clustervars[-which(clustervars==idname)]
+  }
+
+  if(!is.null(clustervars)){
+    if(is.numeric(clustervars)){
+      stop("clustervars need to be the name of the clustering variable.")
     }
   }
-    
   # we can only handle up to 2-way clustering
   # (in principle could do more, but not high priority now)
   if (length(clustervars) > 1) {
     stop("can't handle that many cluster variables")
   }
 
-  # bootstrap
-  bout <- lapply(1:biters, FUN=function(b) {
-    if (length(clustervars) > 0) {
-      # draw Rademachar weights
-      # these are the same within clusters
-      # see paper for details
-      n1 <- length(unique(dta[,clustervars]))
-      Vb <- matrix(sample(c(-1,1), n1, replace=T))
-      Vb <- cbind.data.frame(unique(dta[,clustervars]), Vb)
-      Ub <- data.frame(dta[,clustervars])
-      Ub <- Vb[match(Ub[,1], Vb[,1]),]
-      Ub <- Ub[,-1]
-    } else {
-      Ub <- sample(c(-1,1), n, replace=T)
+  if (length(clustervars) > 0) {
+    # check that cluster variable does not vary over time within unit
+    clust_tv <- aggregate(data[,clustervars], by=list(data[,idname]), function(rr) length(unique(rr))==1)
+    if (!all(clust_tv[,2])) {
+      stop("can't handle time-varying cluster variables")
     }
-    # multiply weights onto influence function
-    Rb <- sqrt(n)*(apply(Ub*(inf.func), 2, mean))
-    # return bootstrap draw
-    Rb
-  })
-  # bootstrap results
-  bres <- simplify2array(bout)
+    ## # CHECK iF CLUSTERVAR is TIME-VARYING
+    ## clust_tv = base::suppressWarnings(stats::aggregate(data[,clustervars], list((data[,idname])), sd))
+    ## clust_tv$x[is.na(clust_tv$x)] <- 0
+    ## if(any(clust_tv[,2]>.Machine$double.eps)){
+    ##   stop("can't handle time-varying cluster variables")
+    ## } else if (!panel){
+    ##   # IF NOT, SUBSET DTA TO ONE VALUE PER ID
+    ##   # Here we do not care about tname and yname as we do not use these
+    ##   dta <- base::suppressWarnings(stats::aggregate(dta, list((data[,idname])), mean)[,-1])
+    ## }
+
+  }
+
+  # multiplier bootstrap
+  n_clusters <- n
+  if (length(clustervars)==0) {
+    #Umat <- matrix(sample(c(-1,1), size=n*biters, replace=TRUE), nrow=n)
+    #bres <- sapply(1:biters, function(b) sqrt(n)*colMeans(Umat[,b]*inf.func))
+    #bres <- sqrt(n)*BMisc::element_wise_mult(Umat, inf.func)
+    bres <- sqrt(n)*BMisc::multiplier_bootstrap(inf.func, biters)
+  } else {
+    #n1 <- length(unique(data[,clustervars]))
+    #Vmat <- matrix(sample(c(-1,1), size=n1*biters, replace=TRUE), nrow=n1)
+    n_clusters <- length(unique(data[,clustervars]))
+    cluster <- dta[,clustervars]
+    cluster_n <- aggregate(cluster, by=list(cluster), length)[,2]
+    cluster_mean_if <- rowsum(inf.func, cluster,reorder=TRUE) / cluster_n
+    bres <- sqrt(n_clusters)*BMisc::multiplier_bootstrap(cluster_mean_if, biters)
+    #bres <- sapply(1:biters, function(b) sqrt(n)*colMeans(Vmat[,b]*cluster_mean_if))
+  }
+  
+  
   # handle vector and matrix case differently, so you get nxk matrix
-  ifelse(class(bres)=="matrix", bres <- t(bres), bres <- as.matrix(bres))
+  # ifelse(class(bres)=="matrix", bres <- t(bres), bres <- as.matrix(bres))
+  
+  if (isTRUE(class(bres) == "numeric")) bres <- as.matrix(bres)
 
   # Non-degenerate dimensions
   # ndg.dim <- (base::colSums(bres) != 0)
-  ndg.dim <- !is.na(colSums(bres))
+  ndg.dim <- (!is.na(colSums(bres))) & (base::colSums(bres^2) > sqrt(.Machine$double.eps)*10)
   # If NA, set it to false
   #ndg.dim[is.na(ndg.dim)] <- FALSE
   bres <- as.matrix(bres[ , ndg.dim])
@@ -102,11 +112,13 @@ mboot <- function(inf.func, DIDparams) {
                                  quantile(b, .25, type=1, na.rm = T))/(qnorm(.75) - qnorm(.25)))
 
   # critical value for uniform confidence band
-  bT <- apply(bres, 1, function(b) max( abs(b/bSigma)))
+  bT <- base::suppressWarnings(apply(bres, 1, function(b) max( abs(b/bSigma), na.rm = T)))
+  bT <- bT[is.finite(bT)]
   crit.val <- quantile(bT, 1-alp, type=1, na.rm = T)
 
-  se <- rep(0, length(ndg.dim))
-  se[ndg.dim] <- as.numeric(bSigma)/sqrt(n)
+  #se <- rep(0, length(ndg.dim))
+  se <- rep(NA, length(ndg.dim))
+  se[ndg.dim] <- as.numeric(bSigma) / sqrt(n_clusters)
   #se[se==0] <- NA
 
   list(bres = bres, V = V, se = se, crit.val = crit.val)

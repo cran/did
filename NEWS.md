@@ -1,3 +1,45 @@
+# did 2.1.0
+
+  * Code is substantially faster/more memory efficient
+
+  * Support for *universal* base period
+  
+  * Major improvements to unit testing 
+
+  * Completely removed `mp.spatt` and `mp.spatt.test` functions (which were the original names for `att_gt`)
+
+  * Simulation/testing code now exported
+  
+  * Removed some slow running checks
+  
+  * Multiplier bootstrap code is now written in C++
+  
+  * Improvements to error handling, added some additional warning messages, removed some unnecessary warning messages
+  
+  * Bug fixes for NA standard errors that occur with very small groups
+
+
+# did 2.0.1
+
+  * Improved plots
+
+  * Maximum event time for event studies
+  
+  * Compute critical value for simultaneous confidence bands even when some standard error is zero (set these to NA)
+  
+  * Improved codes for unbalanced panel data: faster and more memory efficient
+  
+  * Correct estimates of P(G=g|Eventually treated) with unbalanced panel data. This affects **aggte** objects with unbalanced panel data
+  
+  * Bug fixes for summary **aggte** objects
+  
+  * Allow clustering for unbalanced panel data
+  
+  * Fixed error in calendar-type aggregation within **aggte** function (point estimates were not being weighted by group-size; now they are).
+  
+  * Additional error handling
+  
+  
 # did 2.0.0
   * Big improvement on code base / functionality / testing
   

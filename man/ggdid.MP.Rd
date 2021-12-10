@@ -13,13 +13,17 @@
   xgap = 1,
   ncol = 1,
   legend = TRUE,
+  group = NULL,
+  ref_line = 0,
+  theming = TRUE,
+  grtitle = "Group",
   ...
 )
 }
 \arguments{
-\item{object}{either a \code{MP} object or \code{AGGTEobj} object}
+\item{object}{either a \code{MP} object or \code{AGGTEobj} object. See \code{help(ggdid.MP)} and \code{help(ggdid.AGGTEobj)}.}
 
-\item{ylim}{optional y limits for the plot; settng here makes the y limits
+\item{ylim}{optional y limits for the plot; setting here makes the y limits
 the same across different plots}
 
 \item{xlab}{optional x-axis label}
@@ -37,6 +41,16 @@ default is 1.}
 
 \item{legend}{Whether or not to include a legend (which will indicate color
 of pre- and post-treatment estimates).  Default is \code{TRUE}.}
+
+\item{group}{Vector for which groups to include in the plots of ATT(g,t).
+Default is NULL, and, in this case, plots for all groups will be included (\code{ggdid.MP} only).}
+
+\item{ref_line}{A reference line at this value, usually to compare confidence
+intervals to 0. Set to NULL to omit.}
+
+\item{theming}{Set to FALSE to skip all theming so you can do it yourself.}
+
+\item{grtitle}{Title to append before each group name (\code{ggdid.MP} only).}
 
 \item{...}{other arguments}
 }

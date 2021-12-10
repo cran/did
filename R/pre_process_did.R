@@ -1,13 +1,13 @@
-#' @title Process \code{did} Function Arguments
+#' @title Process `did` Function Arguments
 #'
 #' @description Function to process arguments passed to the main methods in the
-#'  \code{did} package as well as conducting some tests to make sure
+#'  `did` package as well as conducting some tests to make sure
 #'  data is in proper format / try to throw helpful error messages.
 #'
 #' @inheritParams att_gt
 #' @param call Function call to att_gt
 #'
-#' @return a \code{\link{DIDparams}} object
+#' @return a [`DIDparams`] object
 #'
 #' @export
 pre_process_did <- function(yname,
@@ -27,6 +27,7 @@ pre_process_did <- function(yname,
                             biters = 1000,
                             clustervars = NULL,
                             est_method = "dr",
+                            base_period = "varying",
                             print_details = TRUE,
                             pl = FALSE,
                             cores = 1,
@@ -42,12 +43,37 @@ pre_process_did <- function(yname,
   if (!all( class(data) == "data.frame")) {
     data <- as.data.frame(data)
   }
+
+  # make sure time periods are numeric
+  if (! (is.numeric(data[, tname])) ) stop("data[, tname] must be numeric")
+
+  #  make sure gname is numeric
+  if (! (is.numeric(data[, gname])) ) stop("data[, gname] must be numeric")
+
+  # put in blank xformla if no covariates
+  if (is.null(xformla)) {
+    xformla <- ~1
+  }
+
+  # drop irrelevant columns from data
+  data <- cbind.data.frame(data[,c(idname, tname, yname, gname, weightsname, clustervars)], model.frame(xformla, data=data, na.action=na.pass))
+
+  # check if any covariates were missing
+  n_orig <- nrow(data)
+  data <- data[complete.cases(data),]
+  n_diff <- n_orig - nrow(data)
+  if (n_diff != 0) {
+    warning(paste0("dropped ", n_diff, " rows from original data due to missing data"))
+  }
+  
   # weights if null
   ifelse(is.null(weightsname), w <- rep(1, nrow(data)), w <- data[,weightsname])
-  data$w <- w
+
+  if (".w" %in% colnames(data)) stop("`did` tried to use column named \".w\" internally, but there was already a column with this name")
+  data$.w <- w
 
   # Outcome variable will be denoted by y
-  data$y <- data[, yname]
+  # data$.y <- data[, yname]
 
   # figure out the dates
   # list of dates from smallest to largest
@@ -61,25 +87,20 @@ pre_process_did <- function(yname,
   # list of treated groups (by time) from smallest to largest
   glist <- unique(data[,gname], )[order(unique(data[,gname]))]
 
+
   # Check if there is a never treated group
   if ( length(glist[glist==0]) == 0) {
     if(control_group=="nevertreated"){
       stop("There is no available never-treated group")
-      #stop("It seems you do not have a never-treated group in the data. If you do have a never-treated group in the data, make sure to set data[,gname] = 0 for the observation in this group. Otherwise, select control_group = \"notyettreated\" so you can use the not-yet treated units as a comparison group.")
     } else {
-      # no need to warn as this is expected case
-      # warning("It seems like that there is not a never-treated group in the data. In this case, we cannot identity the ATT(g,t) for the group that is treated last, nor any ATT(g,t) for t higher than or equal to the largest g.  If you do have a never-treated group in the data, make sure to set data[,gname] = 0 for the observation in this group.")
-
       # Drop all time periods with time periods >= latest treated
       data <- subset(data,(data[,tname] < max(glist,  na.rm = TRUE)))
       # Replace last treated time with zero
       lines.gmax <- data[,gname]==max(glist, na.rm = TRUE)
       data[lines.gmax,gname] <- 0
 
-      #figure out the dates
-      tlist <- unique(data[,tname])[order(unique(data[,tname]))] # this is going to be from smallest to largest
-      # Figure out the groups
-      glist <- unique(data[,gname])[order(unique(data[,gname]))]
+      tlist <- sort(unique(data[,tname]))
+      glist <- sort(unique(data[,gname]))
     }
   }
 
@@ -92,75 +113,48 @@ pre_process_did <- function(yname,
 
   # check for groups treated in the first period and drop these
   # nfirstperiod <- length(unique(data[ !((data[,gname] > first.period) | (data[,gname]==0)), ] )[,idname])
-  treated_first_period <- data[,gname]==first.period
+  treated_first_period <- ( data[,gname] <= first.period ) & ( !(data[,gname]==0) )
   treated_first_period[is.na(treated_first_period)] <- FALSE
-  nfirstperiod <- length(unique(data[treated_first_period,][,idname]))
+  nfirstperiod <- ifelse(panel, length(unique(data[treated_first_period,][,idname])), nrow(data[treated_first_period,]))
   if ( nfirstperiod > 0 ) {
     warning(paste0("Dropped ", nfirstperiod, " units that were already treated in the first period."))
     data <- data[ data[,gname] %in% c(0,glist), ]
+    # update tlist and glist
+    tlist <- unique(data[,tname])[order(unique(data[,tname]))]
+    glist <- unique(data[,gname], )[order(unique(data[,gname]))]
+    glist <- glist[glist>0]
+
+    # drop groups treated in the first period or before
+    first.period <- tlist[1]
+    glist <- glist[glist > first.period + anticipation]
+
   }
-
-
-  # make sure time periods are numeric
-  if (! (is.numeric(data[, tname])) ) stop("data[, tname] must be numeric")
-
+  
+  #  make sure id is numeric
   if (! is.null(idname)){
     #  make sure id is numeric
     if (! (is.numeric(data[, idname])) ) stop("data[, idname] must be numeric")
 
-    # Check if idname is unique by tname
-    n_id_year = all( table(data[, idname], data[, tname]) <= 1)
-    if (! n_id_year) stop("The value of idname must be the unique (by tname)")
+    ## # checks below are useful, but removing due to being slow
+    ## # might ought to figure out a way to do these faster later
+    ## # these checks are also closely related to making sure
+    ## # that we have a well-balanced panel, so it might make
+    ## # sense to move them over to the BMisc package
+    
+    ## # Check if idname is unique by tname
+    ## n_id_year = all( table(data[, idname], data[, tname]) <= 1)
+    ## if (! n_id_year) stop("The value of idname must be the unique (by tname)")
 
-    # make sure first.treat doesn't change across periods for particular individuals
-    if (!all(sapply( split(data, data[,idname]), function(df) {
-      length(unique(df[,gname]))==1
-    }))) {
-      stop("The value of first.treat must be the same across all periods for each particular individual.")
-    }
-  }
-
-  # This is a duplicate but I kept it before making the final changes
-  #if (panel) {
-    # check that id is numeric
-  #  if (! (is.numeric(data[, idname])) ) stop("data[, idname] must be numeric")
-
-    #check that first.treat doesn't change across periods for particular individuals
-   # if (!all(sapply( split(data, data[,idname]), function(df) {
-    #  length(unique(df[,gname]))==1
-    #}))) {
-    #  stop("The value of first.treat must be the same across all periods for each particular individual.")
-    #}
-  #}
-
-
-  # put in blank xformla if no covariates
-  if (is.null(xformla)) {
-    xformla <- ~1
+    ## # make sure gname doesn't change across periods for particular individuals
+    ## if (!all(sapply( split(data, data[,idname]), function(df) {
+    ##   length(unique(df[,gname]))==1
+    ## }))) {
+    ##   stop("The value of gname must be the same across all periods for each particular individual.")
+    ## }
   }
 
 
-  #-----------------------------------------------------------------------------
-  # more error handling after we have balanced the panel
-
-  # check against very small groups
-  gsize <- aggregate(data[,gname], by=list(data[,gname]), function(x) length(x)/length(tlist))
-
-  # how many in each group before give warning
-  # 5 is just a buffer, could pick something else, but seems to work fine
-  reqsize <- length(BMisc::rhs.vars(xformla)) + 5
-
-  # which groups to warn about
-  gsize <- subset(gsize, x < reqsize) # x is name of column from aggregate
-
-  # warn if some groups are small
-  if (nrow(gsize) > 0) {
-    gpaste <-  paste(gsize[,1], collapse=",")
-    warning(paste0("Be aware that there are some small groups in your dataset.\n  Check groups: ", gpaste, "."))
-  }
-  #----------------------------------------------------------------------------
-
-
+  
   # if user specifies repeated cross sections,
   # set that it really is repeated cross sections
   true_repeated_cross_sections <- FALSE
@@ -189,7 +183,7 @@ pre_process_did <- function(yname,
       # this is the case where we coerce balanced panel
 
       # check for complete cases
-      keepers <- complete.cases(cbind.data.frame(data[,c(idname, tname, yname, gname)], model.matrix(xformla, data=data)))
+      keepers <- complete.cases(data)
       n <- length(unique(data[,idname]))
       n.keep <- length(unique(data[keepers,idname]))
       if (nrow(data[keepers,]) < nrow(data)) {
@@ -201,25 +195,24 @@ pre_process_did <- function(yname,
       n.old <- length(unique(data[,idname]))
       data <- BMisc::makeBalancedPanel(data, idname, tname)
       n <- length(unique(data[,idname]))
-      if (nrow(data) < n) {
+      if (n < n.old) {
         warning(paste0("Dropped ", n.old-n, " observations while converting to balanced panel."))
       }
 
       # If drop all data, you do not have a panel.
       if (nrow(data)==0) {
-        stop("All observations dropped to converte data to balanced panel. Consider setting `panel = FALSE' and/or revisit 'idname'.")
+        stop("All observations dropped to converted data to balanced panel. Consider setting `panel = FALSE' and/or revisit 'idname'.")
       }
 
-      # create an n-row data.frame to hold the influence function later
-      #dta <- data[ data[,tname]==tlist[1], ]
-      n <- nrow(data[ data[,tname]==tlist[1], ]) # use this for influence function
+      n <- nrow(data[ data[,tname]==tlist[1], ]) 
 
-      # check that first.treat doesn't change across periods for particular individuals
-      if (!all(sapply( split(data, data[,idname]), function(df) {
-        length(unique(df[,gname]))==1
-      }))) {
-        stop("The value of first.treat must be the same across all periods for each particular individual.")
-      }
+      # slow, repeated check here...
+      ## # check that first.treat doesn't change across periods for particular individuals
+      ## if (!all(sapply( split(data, data[,idname]), function(df) {
+      ##   length(unique(df[,gname]))==1
+      ## }))) {
+      ##   stop("The value of gname must be the same across all periods for each particular individual.")
+      ## }
 
     }
   }
@@ -230,7 +223,7 @@ pre_process_did <- function(yname,
   if (!panel) {
 
     # check for complete cases
-    keepers <- complete.cases(cbind.data.frame(data[,c(tname, yname, gname)], model.matrix(xformla, data=data)))
+    keepers <- complete.cases(data)
     if (nrow(data[keepers,]) < nrow(data)) {
       warning(paste0("Dropped ", nrow(data) - nrow(data[keepers,]), " observations that had missing data."))
       data <- data[keepers,]
@@ -243,14 +236,14 @@ pre_process_did <- function(yname,
 
     # n-row data.frame to hold the influence function
     if (true_repeated_cross_sections) {
-      data$rowid <- seq(1:nrow(data))
-      idname <- "rowid"
+      data$.rowid <- seq(1:nrow(data))
+      idname <- ".rowid"
     } else {
       # set rowid to idname for repeated cross section/unbalanced
-      data$rowid <- data[, idname]
+      data$.rowid <- data[, idname]
     }
 
-    # n is uniques number of observations
+    # n is unique number of cross section observations
     # this is different for repeated cross sections and unbalanced panel
     n <- length(unique(data[,idname]))
   }
@@ -269,12 +262,48 @@ pre_process_did <- function(yname,
   first.period <- tlist[1]
   glist <- glist[glist > first.period + anticipation]
 
+  # Check if groups is empty (usually a problem with the way people defined groups)
+  if(length(glist)==0){
+    stop("No valid groups. The variable in 'gname' should be expressed as the time a unit is first treated (0 if never-treated).")
+  }
+
+  # if there are only two time periods, then uniform confidence
+  # bands are the same as pointwise confidence intervals
+  if (length(tlist)==2) {
+    cband <- FALSE
+  }
+
+  #-----------------------------------------------------------------------------
+  # more error handling after we have balanced the panel
+
+  # check against very small groups
+  gsize <- aggregate(data[,gname], by=list(data[,gname]), function(x) length(x)/length(tlist))
+
+  # how many in each group before give warning
+  # 5 is just a buffer, could pick something else, but seems to work fine
+  reqsize <- length(BMisc::rhs.vars(xformla)) + 5
+
+  # which groups to warn about
+  gsize <- subset(gsize, x < reqsize) # x is name of column from aggregate
+
+  # warn if some groups are small
+  if (nrow(gsize) > 0) {
+    gpaste <-  paste(gsize[,1], collapse=",")
+    warning(paste0("Be aware that there are some small groups in your dataset.\n  Check groups: ", gpaste, "."))
+
+    if ( (0 %in% gsize[,1]) & (control_group == "nevertreated") ) {
+      stop("never treated group is too small, try setting control_group=\"notyettreated\"")
+    }
+  }
+  #----------------------------------------------------------------------------
+
   # How many time periods
   nT <- length(tlist)
   # How many treated groups
   nG <- length(glist)
 
-
+  # order dataset wrt idname and tname
+  data <- data[order(data[,idname], data[,tname]),]
 
   # store parameters for passing around later
   dp <- DIDparams(yname=yname,
@@ -295,6 +324,7 @@ pre_process_did <- function(yname,
                   pl=pl,
                   cores=cores,
                   est_method=est_method,
+                  base_period=base_period,
                   panel=panel,
                   true_repeated_cross_sections=true_repeated_cross_sections,
                   n=n,

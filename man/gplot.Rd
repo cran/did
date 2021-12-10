@@ -11,7 +11,9 @@ gplot(
   ylab = NULL,
   title = "Group",
   xgap = 1,
-  legend = TRUE
+  legend = TRUE,
+  ref_line = 0,
+  theming = TRUE
 )
 }
 \value{
@@ -19,6 +21,6 @@ a \code{ggplot2} object
 }
 \description{
 does the heavy lifting for making a plot of an group-time
- average treatment effect
+average treatment effect
 }
 \keyword{internal}

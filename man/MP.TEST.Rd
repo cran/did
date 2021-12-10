@@ -28,7 +28,7 @@ MP.TEST(
 
 \item{KS}{Kolmogorov-Smirnov test statistic}
 
-\item{KSb}{a vector of boostrapped KS test statistics}
+\item{KSb}{a vector of bootstrapped KS test statistics}
 
 \item{KScval}{KS critical value}
 
@@ -40,5 +40,5 @@ MP.TEST(
 }
 \description{
 An object that holds results from computing pre-test of the
- conditional parallel trends assumption
+conditional parallel trends assumption
 }

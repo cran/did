@@ -22,6 +22,7 @@ att_gt(
   biters = 1000,
   clustervars = NULL,
   est_method = "dr",
+  base_period = "varying",
   print_details = FALSE,
   pl = FALSE,
   cores = 1
@@ -58,7 +59,7 @@ as repeated cross sections.}
 
 \item{allow_unbalanced_panel}{Whether or not function should
 "balance" the panel with respect to time and id.  The default
-values if \code{FALSE} which means that \code{att_gt} will drop
+values if \code{FALSE} which means that \code{\link[=att_gt]{att_gt()}} will drop
 all units where data is not observed in all periods.
 The advantage of this is that the computations are faster
 (sometimes substantially).}
@@ -92,18 +93,18 @@ will be returned.  If bstrap is \code{FALSE}, then analytical
 standard errors are reported.}
 
 \item{cband}{Boolean for whether or not to compute a uniform confidence
- band that covers all of the group-time average treatment effects
- with fixed probability \code{1-alp}.  In order to compute uniform confidence
- bands, \code{bstrap} must also be set to \code{TRUE}.  The default is
+band that covers all of the group-time average treatment effects
+with fixed probability \code{1-alp}.  In order to compute uniform confidence
+bands, \code{bstrap} must also be set to \code{TRUE}.  The default is
 \code{TRUE}.}
 
 \item{biters}{The number of bootstrap iterations to use.  The default is 1000,
 and this is only applicable if \code{bstrap=TRUE}.}
 
-\item{clustervars}{A vector of variables to cluster on.  At most, there
+\item{clustervars}{A vector of variables names to cluster on.  At most, there
 can be two variables (otherwise will throw an error) and one of these
 must be the same as idname which allows for clustering at the individual
-level.}
+level. By default, we cluster at individual level (when \code{bstrap=TRUE}).}
 
 \item{est_method}{the method to compute group-time average treatment effects.  The default is "dr" which uses the doubly robust
 approach in the \code{DRDID} package.  Other built-in methods
@@ -124,6 +125,31 @@ The function can return other things as well, but these are
 the only two that are required. \code{est_method} is only used
 if covariates are included.}
 
+\item{base_period}{Whether to use a "varying" base period or a
+"universal" base period.  Either choice results in the same
+post-treatment estimates of ATT(g,t)'s.  In pre-treatment
+periods, using a varying base period amounts to computing a
+pseudo-ATT in each treatment period by comparing the change
+in outcomes for a particular group relative to its comparison
+group in the pre-treatment periods (i.e., in pre-treatment
+periods this setting computes changes from period t-1 to period
+t, but repeatedly changes the value of t)
+
+A universal base period fixes the base period to always be
+(g-anticipation-1).  This does not compute
+pseudo-ATT(g,t)'s in pre-treatment periods, but rather
+reports average changes in outcomes from period t to
+(g-anticipation-1) for a particular group relative to its comparison
+group.  This is analogous to what is often reported in event
+study regressions.
+
+Using a varying base period results in an estimate of
+ATT(g,t) being reported in the period immediately before
+treatment.  Using a universal base period normalizes the
+estimate in the period right before treatment (or earlier when
+the user allows for anticipation) to be equal to 0, but one
+extra estimate in an earlier period.}
+
 \item{print_details}{Whether or not to show details/progress of computations.
 Default is \code{FALSE}.}
 
@@ -135,37 +161,129 @@ Default is \code{FALSE}.}
 }
 \value{
 an \code{\link{MP}} object containing all the results for group-time average
- treatment effects
+treatment effects
 }
 \description{
 \code{att_gt} computes average treatment effects in DID
- setups where there are more than two periods of data and allowing for
- treatment to occur at different points in time and allowing for
- treatment effect heterogeneity and dynamics.
- See Callaway and Sant'Anna (2020) for a detailed description.
+setups where there are more than two periods of data and allowing for
+treatment to occur at different points in time and allowing for
+treatment effect heterogeneity and dynamics.
+See Callaway and Sant'Anna (2021) for a detailed description.
 }
-\examples{
+\section{Examples:}{
+\strong{Basic \code{\link[=att_gt]{att_gt()}} call:}\if{html}{\out{<div class="sourceCode r">}}\preformatted{# Example data
 data(mpdta)
 
-# with covariates
 out1 <- att_gt(yname="lemp",
-               tname="year",
-               idname="countyreal",
-               gname="first.treat",
-               xformla=~lpop,
-               data=mpdta)
-summary(out1)
-
-# without covariates
-out2 <- att_gt(yname="lemp",
                tname="year",
                idname="countyreal",
                gname="first.treat",
                xformla=NULL,
                data=mpdta)
-summary(out2)
+summary(out1)
+#> 
+#> Call:
+#> att_gt(yname = "lemp", tname = "year", idname = "countyreal", 
+#>     gname = "first.treat", xformla = NULL, data = mpdta)
+#> 
+#> Reference: Callaway, Brantly and Pedro H.C. Sant'Anna.  "Difference-in-Differences with Multiple Time Periods." Journal of Econometrics, Vol. 225, No. 2, pp. 200-230, 2021. <https://doi.org/10.1016/j.jeconom.2020.12.001>, <https://arxiv.org/abs/1803.09015> 
+#> 
+#> Group-Time Average Treatment Effects:
+#>  Group Time ATT(g,t) Std. Error [95\% Simult.  Conf. Band]  
+#>   2004 2004  -0.0105     0.0254       -0.0787      0.0577  
+#>   2004 2005  -0.0704     0.0322       -0.1569      0.0160  
+#>   2004 2006  -0.1373     0.0407       -0.2465     -0.0280 *
+#>   2004 2007  -0.1008     0.0350       -0.1947     -0.0069 *
+#>   2006 2004   0.0065     0.0234       -0.0562      0.0692  
+#>   2006 2005  -0.0028     0.0188       -0.0533      0.0478  
+#>   2006 2006  -0.0046     0.0183       -0.0537      0.0445  
+#>   2006 2007  -0.0412     0.0204       -0.0959      0.0135  
+#>   2007 2004   0.0305     0.0152       -0.0102      0.0712  
+#>   2007 2005  -0.0027     0.0165       -0.0470      0.0416  
+#>   2007 2006  -0.0311     0.0174       -0.0778      0.0156  
+#>   2007 2007  -0.0261     0.0161       -0.0693      0.0172  
+#> ---
+#> Signif. codes: `*' confidence band does not cover 0
+#> 
+#> P-value for pre-test of parallel trends assumption:  0.16812
+#> Control Group:  Never Treated,  Anticipation Periods:  0
+#> Estimation Method:  Doubly Robust
+}\if{html}{\out{</div>}}
 
+\strong{Using covariates:}\if{html}{\out{<div class="sourceCode r">}}\preformatted{out2 <- att_gt(yname="lemp",
+               tname="year",
+               idname="countyreal",
+               gname="first.treat",
+               xformla=~lpop,
+               data=mpdta)
+summary(out2)
+#> 
+#> Call:
+#> att_gt(yname = "lemp", tname = "year", idname = "countyreal", 
+#>     gname = "first.treat", xformla = ~lpop, data = mpdta)
+#> 
+#> Reference: Callaway, Brantly and Pedro H.C. Sant'Anna.  "Difference-in-Differences with Multiple Time Periods." Journal of Econometrics, Vol. 225, No. 2, pp. 200-230, 2021. <https://doi.org/10.1016/j.jeconom.2020.12.001>, <https://arxiv.org/abs/1803.09015> 
+#> 
+#> Group-Time Average Treatment Effects:
+#>  Group Time ATT(g,t) Std. Error [95\% Simult.  Conf. Band]  
+#>   2004 2004  -0.0145     0.0241       -0.0765      0.0475  
+#>   2004 2005  -0.0764     0.0276       -0.1476     -0.0053 *
+#>   2004 2006  -0.1404     0.0381       -0.2387     -0.0422 *
+#>   2004 2007  -0.1069     0.0340       -0.1945     -0.0194 *
+#>   2006 2004  -0.0005     0.0224       -0.0583      0.0574  
+#>   2006 2005  -0.0062     0.0203       -0.0585      0.0461  
+#>   2006 2006   0.0010     0.0179       -0.0452      0.0471  
+#>   2006 2007  -0.0413     0.0198       -0.0923      0.0097  
+#>   2007 2004   0.0267     0.0153       -0.0127      0.0662  
+#>   2007 2005  -0.0046     0.0164       -0.0467      0.0376  
+#>   2007 2006  -0.0284     0.0190       -0.0775      0.0207  
+#>   2007 2007  -0.0288     0.0171       -0.0728      0.0152  
+#> ---
+#> Signif. codes: `*' confidence band does not cover 0
+#> 
+#> P-value for pre-test of parallel trends assumption:  0.23267
+#> Control Group:  Never Treated,  Anticipation Periods:  0
+#> Estimation Method:  Doubly Robust
+}\if{html}{\out{</div>}}
+
+\strong{Specify comparison units:}\if{html}{\out{<div class="sourceCode r">}}\preformatted{out3 <- att_gt(yname="lemp",
+               tname="year",
+               idname="countyreal",
+               gname="first.treat",
+               xformla=~lpop,
+               control_group = "notyettreated",
+               data=mpdta)
+summary(out3)
+#> 
+#> Call:
+#> att_gt(yname = "lemp", tname = "year", idname = "countyreal", 
+#>     gname = "first.treat", xformla = ~lpop, data = mpdta, control_group = "notyettreated")
+#> 
+#> Reference: Callaway, Brantly and Pedro H.C. Sant'Anna.  "Difference-in-Differences with Multiple Time Periods." Journal of Econometrics, Vol. 225, No. 2, pp. 200-230, 2021. <https://doi.org/10.1016/j.jeconom.2020.12.001>, <https://arxiv.org/abs/1803.09015> 
+#> 
+#> Group-Time Average Treatment Effects:
+#>  Group Time ATT(g,t) Std. Error [95\% Simult.  Conf. Band]  
+#>   2004 2004  -0.0212     0.0229       -0.0809      0.0385  
+#>   2004 2005  -0.0816     0.0309       -0.1621     -0.0011 *
+#>   2004 2006  -0.1382     0.0374       -0.2356     -0.0407 *
+#>   2004 2007  -0.1069     0.0329       -0.1926     -0.0212 *
+#>   2006 2004  -0.0075     0.0231       -0.0677      0.0528  
+#>   2006 2005  -0.0046     0.0190       -0.0541      0.0450  
+#>   2006 2006   0.0087     0.0167       -0.0348      0.0522  
+#>   2006 2007  -0.0413     0.0199       -0.0932      0.0106  
+#>   2007 2004   0.0269     0.0137       -0.0088      0.0627  
+#>   2007 2005  -0.0042     0.0158       -0.0455      0.0370  
+#>   2007 2006  -0.0284     0.0194       -0.0789      0.0221  
+#>   2007 2007  -0.0288     0.0175       -0.0742      0.0167  
+#> ---
+#> Signif. codes: `*' confidence band does not cover 0
+#> 
+#> P-value for pre-test of parallel trends assumption:  0.23326
+#> Control Group:  Not Yet Treated,  Anticipation Periods:  0
+#> Estimation Method:  Doubly Robust
+}\if{html}{\out{</div>}}
 }
+
 \references{
-Callaway, Brantly and Sant'Anna, Pedro H. C. "Difference-in-Differences with Multiple Time Periods" Forthcoming at the Journal of Econometrics <https://arxiv.org/abs/1803.09015> (2020).
+Callaway, Brantly and Pedro H.C. Sant'Anna.  \"Difference-in-Differences with Multiple Time Periods.\" Journal of Econometrics, Vol. 225, No. 2, pp. 200-230, 2021. \doi{10.1016/j.jeconom.2020.12.001}, \url{https://arxiv.org/abs/1803.09015}
 }

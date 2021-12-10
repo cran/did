@@ -22,6 +22,7 @@ pre_process_did(
   biters = 1000,
   clustervars = NULL,
   est_method = "dr",
+  base_period = "varying",
   print_details = TRUE,
   pl = FALSE,
   cores = 1,
@@ -59,7 +60,7 @@ as repeated cross sections.}
 
 \item{allow_unbalanced_panel}{Whether or not function should
 "balance" the panel with respect to time and id.  The default
-values if \code{FALSE} which means that \code{att_gt} will drop
+values if \code{FALSE} which means that \code{\link[=att_gt]{att_gt()}} will drop
 all units where data is not observed in all periods.
 The advantage of this is that the computations are faster
 (sometimes substantially).}
@@ -93,18 +94,18 @@ will be returned.  If bstrap is \code{FALSE}, then analytical
 standard errors are reported.}
 
 \item{cband}{Boolean for whether or not to compute a uniform confidence
- band that covers all of the group-time average treatment effects
- with fixed probability \code{1-alp}.  In order to compute uniform confidence
- bands, \code{bstrap} must also be set to \code{TRUE}.  The default is
+band that covers all of the group-time average treatment effects
+with fixed probability \code{1-alp}.  In order to compute uniform confidence
+bands, \code{bstrap} must also be set to \code{TRUE}.  The default is
 \code{TRUE}.}
 
 \item{biters}{The number of bootstrap iterations to use.  The default is 1000,
 and this is only applicable if \code{bstrap=TRUE}.}
 
-\item{clustervars}{A vector of variables to cluster on.  At most, there
+\item{clustervars}{A vector of variables names to cluster on.  At most, there
 can be two variables (otherwise will throw an error) and one of these
 must be the same as idname which allows for clustering at the individual
-level.}
+level. By default, we cluster at individual level (when \code{bstrap=TRUE}).}
 
 \item{est_method}{the method to compute group-time average treatment effects.  The default is "dr" which uses the doubly robust
 approach in the \code{DRDID} package.  Other built-in methods
@@ -125,6 +126,31 @@ The function can return other things as well, but these are
 the only two that are required. \code{est_method} is only used
 if covariates are included.}
 
+\item{base_period}{Whether to use a "varying" base period or a
+"universal" base period.  Either choice results in the same
+post-treatment estimates of ATT(g,t)'s.  In pre-treatment
+periods, using a varying base period amounts to computing a
+pseudo-ATT in each treatment period by comparing the change
+in outcomes for a particular group relative to its comparison
+group in the pre-treatment periods (i.e., in pre-treatment
+periods this setting computes changes from period t-1 to period
+t, but repeatedly changes the value of t)
+
+A universal base period fixes the base period to always be
+(g-anticipation-1).  This does not compute
+pseudo-ATT(g,t)'s in pre-treatment periods, but rather
+reports average changes in outcomes from period t to
+(g-anticipation-1) for a particular group relative to its comparison
+group.  This is analogous to what is often reported in event
+study regressions.
+
+Using a varying base period results in an estimate of
+ATT(g,t) being reported in the period immediately before
+treatment.  Using a universal base period normalizes the
+estimate in the period right before treatment (or earlier when
+the user allows for anticipation) to be equal to 0, but one
+extra estimate in an earlier period.}
+
 \item{print_details}{Whether or not to show details/progress of computations.
 Default is \code{FALSE}.}
 
@@ -141,6 +167,6 @@ a \code{\link{DIDparams}} object
 }
 \description{
 Function to process arguments passed to the main methods in the
- \code{did} package as well as conducting some tests to make sure
- data is in proper format / try to throw helpful error messages.
+\code{did} package as well as conducting some tests to make sure
+data is in proper format / try to throw helpful error messages.
 }

@@ -12,14 +12,14 @@
 #' @param V_analytical Analytical estimator for the asymptotic variance-covariance matrix for group-time average treatment effects
 #' @param se standard errors for group-time average treatment effects. If bootstrap is set to TRUE, this provides bootstrap-based se.
 #' @param inffunc the influence function for estimating group-time average treatment effects
-#' @param n the number of observations
+#' @param n the number of unique cross-sectional units (unique values of idname)
 #' @param W the Wald statistic for pre-testing the common trends assumption
 #' @param Wpval the p-value of the Wald statistic for pre-testing the
 #'  common trends assumption
 #' @param aggte an aggregate treatment effects object
 #' @param alp the significance level, default is 0.05
-#' @param DIDparams a \code{\link{DIDparams}} object.  A way to optionally return the parameters
-#'  of the call to \code{\link{att_gt}} or \code{\link{conditional_did_pretest}}.
+#' @param DIDparams a [`DIDparams`] object.  A way to optionally return the parameters
+#'  of the call to [att_gt()] or [conditional_did_pretest()].
 #'
 #' @return MP object
 #' @export
@@ -49,25 +49,28 @@ summary.MP <- function(object, ...) {
   # citation
   citation()
   cat("\n")
-  
+
   # group time average treatment effects
   cat("Group-Time Average Treatment Effects:\n")
 
   cband_text1a <- paste0(100*(1-mpobj$alp),"% ")
-  cband_text1b <- ifelse(mpobj$DIDparams$cband, "Simult. ", "Pointwise ")
+  cband_text1b <- ifelse(mpobj$DIDparams$bstrap,
+                         ifelse(mpobj$DIDparams$cband, "Simult. ", "Pointwise "),
+                         "Pointwise ")
   cband_text1 <- paste0("[", cband_text1a, cband_text1b)
 
   cband_lower <- mpobj$att - mpobj$c*mpobj$se
   cband_upper <- mpobj$att + mpobj$c*mpobj$se
-  
+
   sig <- (cband_upper < 0) | (cband_lower > 0)
+  sig[is.na(sig)] <- FALSE
   sig_text <- ifelse(sig, "*", "")
-  
+
   out <- cbind.data.frame(mpobj$group, mpobj$t, mpobj$att, mpobj$se, cband_lower, cband_upper)
   out <- round(out,4)
   out <- cbind.data.frame(out, sig_text)
 
-  
+
   colnames(out) <- c("Group", "Time", "ATT(g,t)","Std. Error", cband_text1, "Conf. Band]", "")
   print(out, row.names=FALSE)
   cat("---\n")
@@ -80,9 +83,9 @@ summary.MP <- function(object, ...) {
     cat(as.character(mpobj$Wpval))
     cat("\n")
   }
-  
 
-  
+
+
   # set control group text
   control_group <- mpobj$DIDparams$control_group
   control_group_text <- NULL
@@ -114,7 +117,7 @@ summary.MP <- function(object, ...) {
     } else if (est_method == "reg") {
       est_method_text <- "Outcome Regression"
     }
-    
+
     cat("Estimation Method:  ")
     cat(est_method_text)
     cat("\n")
