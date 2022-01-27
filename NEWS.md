@@ -1,3 +1,15 @@
+# did 2.1.1
+
+  * Bug fixes related unbalanced panel and clustered standard errors
+  
+  * Bug fixes for conditional_did_pretest
+  
+  * Even faster bootstrap code (thanks Kyle Butts)
+  
+  * Updated version requirement for `BMisc` package
+  
+  * Bug fix for unbalanced panel and repeated cross sections in pre-treatment periods using universal base period
+
 # did 2.1.0
 
   * Code is substantially faster/more memory efficient

@@ -53,7 +53,7 @@ compute.att_gt <- function(dp) {
   # number of time periods
   tlist.length <- length(tlist)
   tfac <- 0
-  
+
   if (base_period != "universal") {
     tlist.length <- tlist.length - 1
     tfac <- 1
@@ -62,12 +62,36 @@ compute.att_gt <- function(dp) {
   # influence function
   inffunc <- Matrix::Matrix(data=0,nrow=n, ncol=nG*(nT-tfac), sparse=TRUE)
 
+  # never treated option
+  nevertreated <- (control_group[1] == "nevertreated")
+
+  if(nevertreated) {
+    data$.C <- 1*(data[,gname] == 0)
+  }
+
+  # rename yname to .y
+  data$.y <- data[,yname]
+
   # loop over groups
   for (g in 1:nG) {
+
+    # Set up .G once
+    data$.G <- 1*(data[,gname] == glist[g])
 
     # loop over time periods
     for (t in 1:tlist.length) {
 
+      # use "not yet treated as control"
+      # that is, never treated + units that are eventually treated,
+      # but not treated by the current period
+      if(!nevertreated) {
+        data$.C <- 1 * ((data[,gname] == 0) |
+                            ((data[,gname] > tlist[t+tfac]) &
+                               (data[,gname] != glist[g])))
+      }
+
+      #-----------------------------------------------------------------------------
+      # Set pret
 
       # varying base period
       pret <- t
@@ -77,7 +101,7 @@ compute.att_gt <- function(dp) {
         # use same base period as for post-treatment periods
         pret <- tail(which( (tlist+anticipation) < glist[g]),1)
       }
-      
+
 
       # check if in post-treatment period
       if ((glist[g]<=tlist[(t+tfac)])) {
@@ -95,7 +119,7 @@ compute.att_gt <- function(dp) {
         }
       }
 
-      
+
       #-----------------------------------------------------------------------------
       # if we are in period (g-1), normalize results to be equal to 0
       # and break without computing anything
@@ -106,7 +130,7 @@ compute.att_gt <- function(dp) {
           counter <- counter+1
           next
         }
-      }          
+      }
 
       # print the details of which iteration we are on
       if (print_details) {
@@ -119,47 +143,17 @@ compute.att_gt <- function(dp) {
       # results for the case with panel data
       #-----------------------------------------------------------------------------
 
-      #if (panel) {
-
       # post treatment dummy variable
-      post.treat <- 1*(glist[g]<=tlist[t+tfac])
+      post.treat <- 1*(glist[g] <= tlist[t+tfac])
 
-      # get dataset with current period and pre-treatment period
-      disdat <- data[(data[,tname]==tlist[t+tfac] | data[,tname]==tlist[pret]),]
+      # total number of units (not just included in G or C)
+      disdat <- data[data[,tname] == tlist[t+tfac] | data[,tname] == tlist[pret],]
 
-      # kind of hack, but need it to count for repeated cross sections case
-      thisdata <- data
 
-      nevertreated <- (control_group[1] == "nevertreated")
-      # sete up control group
-      if(nevertreated){
-        # use the "never treated" group as the control group
-        disdat$.C <- 1*(disdat[,gname] == 0)
-        thisdata$.C <- 1*(thisdata[,gname] == 0)
-        thisdata$.G <- 1*(thisdata[,gname] == glist[g])
-      }
-      if(!nevertreated){
-        # use "not yet treated as control"
-        # that is, never treated + units that are eventually treated,
-        # but not treated by the current period
-        disdat$.C <- 1 * ((disdat[,gname] == 0) |
-                           ((disdat[,gname] > tlist[t+tfac]) &
-                              (disdat[,gname] != glist[g])))
-        thisdata$.C <- 1*((thisdata[,gname] == 0) |
-                           ((thisdata[,gname] > tlist[t+tfac]) &
-                              (thisdata[,gname] != glist[g])))
-        thisdata$.G <- 1*(thisdata[,gname] == glist[g])
-      }
-
-      # set up dummy for particular treated group
-      disdat$.G <- 1*(disdat[,gname] == glist[g])
-      disdat$.y <- disdat[,yname]
-      
       if (panel) {
-
         # transform  disdat it into "cross-sectional" data where one of the columns
         # contains the change in the outcome over time.
-        disdat <- BMisc::panel2cs2(disdat, yname, idname, tname, balance_panel=FALSE)
+        disdat <- panel2cs2(disdat, yname, idname, tname, balance_panel=FALSE)
 
         # still total number of units (not just included in G or C)
         n <- nrow(disdat)
@@ -170,16 +164,21 @@ compute.att_gt <- function(dp) {
         # pick up the data that will be used to compute ATT(g,t)
         disdat <- disdat[disidx,]
 
+        n1 <- nrow(disdat) # num obs. for computing ATT(g,t)
+
         # drop missing factors
         disdat <- droplevels(disdat)
 
         # give short names for data in this iteration
         G <- disdat$.G
         C <- disdat$.C
-        # handle pre-treatmen universal base period differenctly
-        Ypre <- if(tlist[(t+tfac)] > pret) disdat$.y0 else disdat$.y1
-        Ypost <- if(tlist[(t+tfac)] > pret) disdat$.y1 else disdat$.y0
-        n1 <- nrow(disdat) # num obs. for computing ATT(g,t)
+
+        # handle pre-treatment universal base period differently
+        # we need to do this because panel2cs2 just puts later period
+        # in .y1, but if we are in a pre-treatment period with a universal
+        # base period, then the "base period" is actually the later period
+        Ypre <- if(tlist[(t+tfac)] > tlist[pret]) disdat$.y0 else disdat$.y1
+        Ypost <- if(tlist[(t+tfac)] > tlist[pret]) disdat$.y1 else disdat$.y0
         w <- disdat$.w
 
         # matrix of covariates
@@ -227,7 +226,7 @@ compute.att_gt <- function(dp) {
         # code for actually computing att(g,t)
         #-----------------------------------------------------------------------------
 
-        if (class(est_method) == "function") {
+        if (inherits(est_method,"function")) {
           # user-specified function
           attgt <- est_method(y1=Ypost, y0=Ypre,
                               D=G,
@@ -260,9 +259,6 @@ compute.att_gt <- function(dp) {
 
       } else { # repeated cross sections / unbalanced panel
 
-        # total number of observations
-        #n  <- nrow(data)
-
         # pick up the indices for units that will be used to compute ATT(g,t)
         # these conditions are (1) you are observed in the right period and
         # (2) you are in the right group (it is possible to be observed in
@@ -276,7 +272,7 @@ compute.att_gt <- function(dp) {
         disidx <- (data$.rowid %in% rightids) & ( (data[,tname] == tlist[t+tfac]) | (data[,tname]==tlist[pret]))
 
         # pick up the data that will be used to compute ATT(g,t)
-        disdat <- thisdata[disidx,]
+        disdat <- data[disidx,]
 
         # drop missing factors
         disdat <- droplevels(disdat)
@@ -325,7 +321,7 @@ compute.att_gt <- function(dp) {
         # code for actually computing att(g,t)
         #-----------------------------------------------------------------------------
 
-        if (class(est_method) == "function") {
+        if (inherits(est_method, "function")) {
           # user-specified function
           attgt <- est_method(y=Y,
                               post=post,
@@ -373,7 +369,9 @@ compute.att_gt <- function(dp) {
       } #end panel if
 
       # save results for this att(g,t)
-      attgt.list[[counter]] <- list(att=attgt$ATT, group=glist[g], year=tlist[(t+tfac)], post=post.treat)
+      attgt.list[[counter]] <- list(
+        att = attgt$ATT, group = glist[g], year = tlist[(t+tfac)], post = post.treat
+      )
 
       # recover the influence function
       # start with vector of 0s because influence function
