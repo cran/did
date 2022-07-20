@@ -153,11 +153,9 @@ extra estimate in an earlier period.}
 \item{print_details}{Whether or not to show details/progress of computations.
 Default is \code{FALSE}.}
 
-\item{pl}{Whether or not to use parallel processing
-(not implemented yet)}
+\item{pl}{Whether or not to use parallel processing}
 
-\item{cores}{The number of cores to use for parallel processing
-(not implemented yet)}
+\item{cores}{The number of cores to use for parallel processing}
 }
 \value{
 an \code{\link{MP}} object containing all the results for group-time average
@@ -171,7 +169,9 @@ treatment effect heterogeneity and dynamics.
 See Callaway and Sant'Anna (2021) for a detailed description.
 }
 \section{Examples:}{
-\strong{Basic \code{\link[=att_gt]{att_gt()}} call:}\if{html}{\out{<div class="sourceCode r">}}\preformatted{# Example data
+\strong{Basic \code{\link[=att_gt]{att_gt()}} call:}
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{# Example data
 data(mpdta)
 
 out1 <- att_gt(yname="lemp",
@@ -190,18 +190,18 @@ summary(out1)
 #> 
 #> Group-Time Average Treatment Effects:
 #>  Group Time ATT(g,t) Std. Error [95\% Simult.  Conf. Band]  
-#>   2004 2004  -0.0105     0.0247       -0.0767      0.0557  
-#>   2004 2005  -0.0704     0.0306       -0.1525      0.0117  
-#>   2004 2006  -0.1373     0.0383       -0.2398     -0.0347 *
-#>   2004 2007  -0.1008     0.0355       -0.1960     -0.0056 *
-#>   2006 2004   0.0065     0.0225       -0.0537      0.0667  
-#>   2006 2005  -0.0028     0.0191       -0.0540      0.0485  
-#>   2006 2006  -0.0046     0.0179       -0.0526      0.0434  
-#>   2006 2007  -0.0412     0.0197       -0.0940      0.0115  
-#>   2007 2004   0.0305     0.0161       -0.0127      0.0737  
-#>   2007 2005  -0.0027     0.0153       -0.0436      0.0382  
-#>   2007 2006  -0.0311     0.0177       -0.0784      0.0162  
-#>   2007 2007  -0.0261     0.0173       -0.0723      0.0202  
+#>   2004 2004  -0.0105     0.0235       -0.0752      0.0542  
+#>   2004 2005  -0.0704     0.0307       -0.1549      0.0140  
+#>   2004 2006  -0.1373     0.0365       -0.2379     -0.0367 *
+#>   2004 2007  -0.1008     0.0383       -0.2062      0.0046  
+#>   2006 2004   0.0065     0.0236       -0.0585      0.0715  
+#>   2006 2005  -0.0028     0.0195       -0.0564      0.0509  
+#>   2006 2006  -0.0046     0.0185       -0.0556      0.0464  
+#>   2006 2007  -0.0412     0.0202       -0.0969      0.0145  
+#>   2007 2004   0.0305     0.0155       -0.0122      0.0733  
+#>   2007 2005  -0.0027     0.0158       -0.0462      0.0408  
+#>   2007 2006  -0.0311     0.0176       -0.0794      0.0173  
+#>   2007 2007  -0.0261     0.0167       -0.0720      0.0199  
 #> ---
 #> Signif. codes: `*' confidence band does not cover 0
 #> 
@@ -210,7 +210,9 @@ summary(out1)
 #> Estimation Method:  Doubly Robust
 }\if{html}{\out{</div>}}
 
-\strong{Using covariates:}\if{html}{\out{<div class="sourceCode r">}}\preformatted{out2 <- att_gt(yname="lemp",
+\strong{Using covariates:}
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{out2 <- att_gt(yname="lemp",
                tname="year",
                idname="countyreal",
                gname="first.treat",
@@ -226,18 +228,18 @@ summary(out2)
 #> 
 #> Group-Time Average Treatment Effects:
 #>  Group Time ATT(g,t) Std. Error [95\% Simult.  Conf. Band]  
-#>   2004 2004  -0.0145     0.0236       -0.0771      0.0480  
-#>   2004 2005  -0.0764     0.0297       -0.1554      0.0026  
-#>   2004 2006  -0.1404     0.0353       -0.2343     -0.0466 *
-#>   2004 2007  -0.1069     0.0318       -0.1915     -0.0223 *
-#>   2006 2004  -0.0005     0.0244       -0.0652      0.0643  
-#>   2006 2005  -0.0062     0.0193       -0.0573      0.0449  
-#>   2006 2006   0.0010     0.0198       -0.0517      0.0536  
-#>   2006 2007  -0.0413     0.0193       -0.0925      0.0099  
-#>   2007 2004   0.0267     0.0145       -0.0117      0.0651  
-#>   2007 2005  -0.0046     0.0161       -0.0474      0.0382  
-#>   2007 2006  -0.0284     0.0189       -0.0786      0.0217  
-#>   2007 2007  -0.0288     0.0163       -0.0722      0.0146  
+#>   2004 2004  -0.0145     0.0233       -0.0759      0.0469  
+#>   2004 2005  -0.0764     0.0297       -0.1546      0.0018  
+#>   2004 2006  -0.1404     0.0348       -0.2321     -0.0488 *
+#>   2004 2007  -0.1069     0.0340       -0.1964     -0.0174 *
+#>   2006 2004  -0.0005     0.0236       -0.0627      0.0618  
+#>   2006 2005  -0.0062     0.0184       -0.0548      0.0424  
+#>   2006 2006   0.0010     0.0194       -0.0502      0.0521  
+#>   2006 2007  -0.0413     0.0189       -0.0912      0.0086  
+#>   2007 2004   0.0267     0.0145       -0.0115      0.0650  
+#>   2007 2005  -0.0046     0.0163       -0.0476      0.0384  
+#>   2007 2006  -0.0284     0.0191       -0.0788      0.0219  
+#>   2007 2007  -0.0288     0.0166       -0.0724      0.0149  
 #> ---
 #> Signif. codes: `*' confidence band does not cover 0
 #> 
@@ -246,7 +248,9 @@ summary(out2)
 #> Estimation Method:  Doubly Robust
 }\if{html}{\out{</div>}}
 
-\strong{Specify comparison units:}\if{html}{\out{<div class="sourceCode r">}}\preformatted{out3 <- att_gt(yname="lemp",
+\strong{Specify comparison units:}
+
+\if{html}{\out{<div class="sourceCode r">}}\preformatted{out3 <- att_gt(yname="lemp",
                tname="year",
                idname="countyreal",
                gname="first.treat",
@@ -263,18 +267,18 @@ summary(out3)
 #> 
 #> Group-Time Average Treatment Effects:
 #>  Group Time ATT(g,t) Std. Error [95\% Simult.  Conf. Band]  
-#>   2004 2004  -0.0212     0.0222       -0.0799      0.0375  
-#>   2004 2005  -0.0816     0.0297       -0.1599     -0.0033 *
-#>   2004 2006  -0.1382     0.0343       -0.2288     -0.0476 *
-#>   2004 2007  -0.1069     0.0364       -0.2028     -0.0110 *
-#>   2006 2004  -0.0075     0.0227       -0.0674      0.0525  
-#>   2006 2005  -0.0046     0.0180       -0.0521      0.0430  
-#>   2006 2006   0.0087     0.0170       -0.0362      0.0535  
-#>   2006 2007  -0.0413     0.0188       -0.0909      0.0083  
-#>   2007 2004   0.0269     0.0142       -0.0106      0.0645  
-#>   2007 2005  -0.0042     0.0159       -0.0462      0.0378  
-#>   2007 2006  -0.0284     0.0186       -0.0774      0.0205  
-#>   2007 2007  -0.0288     0.0172       -0.0742      0.0167  
+#>   2004 2004  -0.0212     0.0225       -0.0810      0.0386  
+#>   2004 2005  -0.0816     0.0296       -0.1603     -0.0029 *
+#>   2004 2006  -0.1382     0.0382       -0.2397     -0.0367 *
+#>   2004 2007  -0.1069     0.0353       -0.2007     -0.0131 *
+#>   2006 2004  -0.0075     0.0236       -0.0703      0.0553  
+#>   2006 2005  -0.0046     0.0193       -0.0559      0.0468  
+#>   2006 2006   0.0087     0.0171       -0.0367      0.0540  
+#>   2006 2007  -0.0413     0.0195       -0.0931      0.0105  
+#>   2007 2004   0.0269     0.0136       -0.0093      0.0632  
+#>   2007 2005  -0.0042     0.0158       -0.0461      0.0377  
+#>   2007 2006  -0.0284     0.0185       -0.0777      0.0208  
+#>   2007 2007  -0.0288     0.0167       -0.0732      0.0156  
 #> ---
 #> Signif. codes: `*' confidence band does not cover 0
 #> 

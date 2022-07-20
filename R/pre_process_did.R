@@ -37,7 +37,9 @@ pre_process_did <- function(yname,
   #-----------------------------------------------------------------------------
   # set control group
   control_group <- control_group[1]
-
+  if(!(control_group %in% c("nevertreated","notyettreated"))){
+    stop("control_group must be either 'nevertreated' or 'notyettreated'")
+  }
   # make sure dataset is a data.frame
   # this gets around RStudio's default of reading data as tibble
   if (!all( class(data) == "data.frame")) {
@@ -65,7 +67,7 @@ pre_process_did <- function(yname,
   if (n_diff != 0) {
     warning(paste0("dropped ", n_diff, " rows from original data due to missing data"))
   }
-  
+
   # weights if null
   ifelse(is.null(weightsname), w <- rep(1, nrow(data)), w <- data[,weightsname])
 
@@ -94,13 +96,17 @@ pre_process_did <- function(yname,
       stop("There is no available never-treated group")
     } else {
       # Drop all time periods with time periods >= latest treated
-      data <- subset(data,(data[,tname] < max(glist,  na.rm = TRUE)))
+      data <- subset(data,(data[,tname] < (max(glist)-anticipation)))
       # Replace last treated time with zero
-      lines.gmax <- data[,gname]==max(glist, na.rm = TRUE)
-      data[lines.gmax,gname] <- 0
+      # lines.gmax <- data[,gname]==max(glist, na.rm = TRUE)
+      # data[lines.gmax,gname] <- 0
 
       tlist <- sort(unique(data[,tname]))
       glist <- sort(unique(data[,gname]))
+
+      # don't comput ATT(g,t) for groups that are only treated at end
+      # and only play a role as a comparison group
+      glist <- glist[ glist < max(glist)] 
     }
   }
 
@@ -129,7 +135,7 @@ pre_process_did <- function(yname,
     glist <- glist[glist > first.period + anticipation]
 
   }
-  
+
   #  make sure id is numeric
   if (! is.null(idname)){
     #  make sure id is numeric
@@ -140,7 +146,7 @@ pre_process_did <- function(yname,
     ## # these checks are also closely related to making sure
     ## # that we have a well-balanced panel, so it might make
     ## # sense to move them over to the BMisc package
-    
+
     ## # Check if idname is unique by tname
     ## n_id_year = all( table(data[, idname], data[, tname]) <= 1)
     ## if (! n_id_year) stop("The value of idname must be the unique (by tname)")
@@ -154,7 +160,7 @@ pre_process_did <- function(yname,
   }
 
 
-  
+
   # if user specifies repeated cross sections,
   # set that it really is repeated cross sections
   true_repeated_cross_sections <- FALSE
@@ -204,7 +210,7 @@ pre_process_did <- function(yname,
         stop("All observations dropped to converted data to balanced panel. Consider setting `panel = FALSE' and/or revisit 'idname'.")
       }
 
-      n <- nrow(data[ data[,tname]==tlist[1], ]) 
+      n <- nrow(data[ data[,tname]==tlist[1], ])
 
       # slow, repeated check here...
       ## # check that first.treat doesn't change across periods for particular individuals
@@ -248,19 +254,19 @@ pre_process_did <- function(yname,
     n <- length(unique(data[,idname]))
   }
 
-  # Update tlist and glist because of data handling
-  # figure out the dates
-  # list of dates from smallest to largest
-  tlist <- unique(data[,tname])[order(unique(data[,tname]))]
-  # list of treated groups (by time) from smallest to largest
-  glist <- unique(data[,gname])[order(unique(data[,gname]))]
+  ## # Update tlist and glist because of data handling
+  ## # figure out the dates
+  ## # list of dates from smallest to largest
+  ## tlist <- unique(data[,tname])[order(unique(data[,tname]))]
+  ## # list of treated groups (by time) from smallest to largest
+  ## glist <- unique(data[,gname])[order(unique(data[,gname]))]
 
-  # Only the treated groups
-  glist <- glist[glist>0]
+  ## # Only the treated groups
+  ## glist <- glist[glist>0]
 
-  # drop groups treated in the first period or before
-  first.period <- tlist[1]
-  glist <- glist[glist > first.period + anticipation]
+  ## # drop groups treated in the first period or before
+  ## first.period <- tlist[1]
+  ## glist <- glist[glist > first.period + anticipation]
 
   # Check if groups is empty (usually a problem with the way people defined groups)
   if(length(glist)==0){
@@ -311,7 +317,7 @@ pre_process_did <- function(yname,
                   idname=idname,
                   gname=gname,
                   xformla=xformla,
-                  data=data,
+                  data=as.data.frame(data),
                   control_group=control_group,
                   anticipation=anticipation,
                   weightsname=weightsname,

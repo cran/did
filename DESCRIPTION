@@ -1,6 +1,6 @@
 Package: did
 Title: Treatment Effects with Multiple Periods and Groups
-Version: 2.1.1
+Version: 2.1.2
 Authors@R: c(person("Brantly", "Callaway", email = "brantly.callaway@uga.edu", role = c("aut", "cre")), person("Pedro H. C.", "Sant'Anna", email="pedro.h.santanna@vanderbilt.edu", role = c("aut")))
 URL: https://bcallaway11.github.io/did/,
         https://github.com/bcallaway11/did/
@@ -10,14 +10,14 @@ License: GPL-2
 Encoding: UTF-8
 LazyData: true
 Imports: BMisc (>= 1.4.4), Matrix, pbapply, ggplot2, ggpubr, DRDID,
-        generics, tidyr
-RoxygenNote: 7.1.2
+        generics, methods, tidyr
+RoxygenNote: 7.2.1
 VignetteBuilder: knitr
 Suggests: rmarkdown, plm, here, knitr, covr
 NeedsCompilation: no
-Packaged: 2022-01-27 20:35:50 UTC; bmc43193
+Packaged: 2022-07-20 03:09:38 UTC; brant
 Author: Brantly Callaway [aut, cre],
   Pedro H. C. Sant'Anna [aut]
 Maintainer: Brantly Callaway <brantly.callaway@uga.edu>
 Repository: CRAN
-Date/Publication: 2022-01-27 22:00:02 UTC
+Date/Publication: 2022-07-20 16:00:05 UTC

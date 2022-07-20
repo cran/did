@@ -16,8 +16,6 @@ knitr::opts_chunk$set(
 )
 ```
 
-
-
 # Introduction
 
 This vignette discusses the basics of using Difference-in-Differences (DiD) designs to identify and estimate the average effect of participating in a treatment with a particular focus on tools from the **did** package. The background article for it is [Callaway and Sant'Anna (2021), "Difference-in-Differences with Multiple Time Periods"](https://doi.org/10.1016/j.jeconom.2020.12.001).
@@ -75,13 +73,13 @@ library(did)
 #fldr <- here::here("R/")
 #sapply(paste0(fldr,list.files(fldr)), source)
 # Source simulation designs
-source(here::here("vignettes/setup_sims.R"))
+#source(here::here("vignettes/setup_sims.R"))
 ```
 
 ```{r, echo=FALSE}
 time.periods <- 4
-reset.sim()
-te <- 0
+sp <- reset.sim()
+sp$te <- 0
 ```
 
 ```{r, message = FALSE, warning = FALSE}
@@ -92,11 +90,11 @@ set.seed(1814)
 time.periods <- 4
 
 # add dynamic effects
-te.e <- 1:time.periods
+sp$te.e <- 1:time.periods
 
 # generate data set with these parameters
 # here, we dropped all units who are treated in time period 1 as they do not help us recover ATT(g,t)'s.
-dta <- build_sim_dataset()
+dta <- build_sim_dataset(sp)
 
 # How many observations remained after dropping the ``always-treated'' units
 nrow(dta)
